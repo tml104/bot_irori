@@ -39,7 +39,7 @@ from Sniffer import removeSniffer, syncSniffer, clearSniffer, appendSniffer, ove
 from Utils import *
 importMirai()
 
-def BVCoder(*attrs,**kwargs):
+async def BVCoder(*attrs,kwargs={}):
     def dec(x):
         r=0
         for i in range(6):
@@ -68,24 +68,24 @@ def BVCoder(*attrs,**kwargs):
         ostr = [Plain(text=str(e))]
     return ostr
         
-def 编码base64(*attrs,**kwargs):
+async def 编码base64(*attrs,kwargs={}):
     try:
         return [Plain(text=str(base64.b64encode(bytes(i,'utf-8')))+'\n') for i in attrs]
     except Exception as e:
         return [Plain(text=str(e))]
 
-def 解码base64(*attrs,**kwargs):
+async def 解码base64(*attrs,kwargs={}):
     try:
         return [Plain(text=str(base64.b64decode(i))+'\n') for i in attrs]
     except Exception as e:
         return [Plain(text=str(e))]
 
-def rot_13(*attrs,**kwargs):
+async def rot_13(*attrs,kwargs={}):
     upperdict = {'A': 'N', 'B': 'O', 'C': 'P', 'D': 'Q', 'E': 'R', 'F': 'S', 'G': 'T', 'H': 'U', 'I': 'V', 'J': 'W', 'K': 'X', 'L': 'Y',
-			 'M': 'Z', 'N': 'A', 'O': 'B', 'P': 'C', 'Q': 'D', 'R': 'E', 'S': 'F', 'T': 'G', 'U': 'H', 'V': 'I', 'W': 'J', 'X': 'K', 'Y': 'L', 'Z': 'M'}
+    'M': 'Z', 'N': 'A', 'O': 'B', 'P': 'C', 'Q': 'D', 'R': 'E', 'S': 'F', 'T': 'G', 'U': 'H', 'V': 'I', 'W': 'J', 'X': 'K', 'Y': 'L', 'Z': 'M'}
 
     lowerdict = {'a': 'n', 'b': 'o', 'c': 'p', 'd': 'q', 'e': 'r', 'f': 's', 'g': 't', 'h': 'u', 'i': 'v', 'j': 'w', 'k': 'x', 'l': 'y',
-                'm': 'z', 'n': 'a', 'o': 'b', 'p': 'c', 'q': 'd', 'r': 'e', 's': 'f', 't': 'g', 'u': 'h', 'v': 'i', 'w': 'j', 'x': 'k', 'y': 'l', 'z': 'm'}
+    'm': 'z', 'n': 'a', 'o': 'b', 'p': 'c', 'q': 'd', 'r': 'e', 's': 'f', 't': 'g', 'u': 'h', 'v': 'i', 'w': 'j', 'x': 'k', 'y': 'l', 'z': 'm'}
     ostr = []
     for j in attrs:
         dst=[]
@@ -99,9 +99,9 @@ def rot_13(*attrs,**kwargs):
         ostr.append(Plain(text=''.join(dst)+'\n'))
     return ostr
 
-def 字符串反转(*attrs,**kwargs):return [Plain(' '.join(attrs)[::-1])]
+async def 字符串反转(*attrs,kwargs={}):return [Plain(' '.join(attrs)[::-1])]
 
-def 二维码生成器(*attrs,**kwargs):
+async def 二维码生成器(*attrs,kwargs={}):
     s = ' '.join(attrs)
     q = qrcode.make(s)
     fn = 'tmpqrcode'+randstr(GLOBAL.randomStrLength)
@@ -110,7 +110,7 @@ def 二维码生成器(*attrs,**kwargs):
     asyncio.ensure_future(rmTmpFile(fn),loop=None)
     return [generateImageFromFile(fn)]
 
-def 字符串签名(*attrs,**kwargs):
+async def 字符串签名(*attrs,kwargs={}):
     if 'pic' in kwargs and kwargs['pic']:
         src = requests.get(kwargs['pic'].url).content
     elif attrs:
@@ -124,7 +124,7 @@ def 字符串签名(*attrs,**kwargs):
         Plain(f"CRC32:{hex(zlib.crc32(src))}\n")
         ]
     
-def 復讀(*attrs,**kwargs):return [Plain(' '.join(attrs))]
+async def 復讀(*attrs,kwargs={}):return [Plain(' '.join(attrs))]
 
 with open('Assets/zh2morse.json','r') as f:
     z2m = json.load(f)
@@ -152,7 +152,7 @@ k2 = """.- -... -.-. -..
 a2m = dict(zip(k1,k2.split()))
 m2a = dict(zip(k2.split(),k1))
 
-def 转电码(*attrs,**kwargs):
+async def 转电码(*attrs,kwargs={}):
     global z2m,a2m
     msg = ' '.join(attrs).upper()
 
@@ -187,7 +187,7 @@ def 转电码(*attrs,**kwargs):
     
     return [Plain(split_symbol.join(ans))]
 
-def 译电码(*attrs,**kwargs):
+async def 译电码(*attrs,kwargs={}):
     global m2a
     msg = ' '.join(attrs).upper()
 
@@ -206,15 +206,22 @@ def 译电码(*attrs,**kwargs):
         for i in conf:
             msg = msg.replace(f'''SPLIT={i}''','')
     
-    msg = msg.replace(' ','')
+    
     ans = []
-    for i in msg.split(split_symbol):
-        if i not in m2a:
-            return [Plain(f'不合法的电码：{i}')]
-        ans.append(m2a[i])
+    if len(attrs) > 3:
+        for i in msg.split():
+            if i not in m2a:
+                return [Plain(f'不合法的电码：{i}')]
+            ans.append(m2a[i])
+    else:
+        msg = msg.replace(' ','')
+        for i in msg.split(split_symbol):
+            if i not in m2a:
+                return [Plain(f'不合法的电码：{i}')]
+            ans.append(m2a[i])
     return [Plain(''.join(ans))]
 
-def 译中文电码(*attrs,**kwargs):
+async def 译中文电码(*attrs,kwargs={}):
     global m2z
     msg = ' '.join(attrs).upper()
 
@@ -824,46 +831,49 @@ book_of_answers_en = [
 
 book_of_answers_en = list(set(book_of_answers_en))
 
-def 答案之书(*attrs,**kwargs):
+async def 答案之书(*attrs,kwargs={}):
+    '向答案之书提问（答非所问（问就是自己解决（不会真的有人认为答案之书有用吧？不会吧不会吧？'
     player = getPlayer(**kwargs)
     if attrs:
         if attrs[-1] in ('sub','sniff'):
-            overwriteSniffer(player,'#为什么',r'\?')
-            appendSniffer(player,'#为什么',r'\？')
-            appendSniffer(player,'#为什么',r'¿')
-            appendSniffer(player,'#为什么',r'吗')
-            appendSniffer(player,'#为什么',r'怎么')
-            appendSniffer(player,'#为什么',r'如何')
-            appendSniffer(player,'#为什么',r'为什么')
+            overwriteSniffer(player,'#答案之书',r'\?')
+            appendSniffer(player,'#答案之书',r'\？')
+            appendSniffer(player,'#答案之书',r'¿')
+            appendSniffer(player,'#答案之书',r'吗')
+            appendSniffer(player,'#答案之书',r'啥')
+            appendSniffer(player,'#答案之书',r'怎么')
+            appendSniffer(player,'#答案之书',r'如何')
+            appendSniffer(player,'#答案之书',r'为什么')
             return [Plain('【答案之书】sniff模式')]
         elif attrs[-1] in GLOBAL.unsubscribes:
-            removeSniffer(player,'#为什么')
+            removeSniffer(player,'#答案之书')
             return [Plain('【答案之书】禁用sniffer')]
     dynamic_answers = [f"http://iwo.im/?q={quote(' '.join(attrs))}"]
     ans = random.choice(book_of_answers+dynamic_answers)
     return [Plain(ans.strip())]
 
-def 答案之书en(*attrs,**kwargs):
+async def 答案之书en(*attrs,kwargs={}):
+    '向答案之书（英文）提问（答非所问（问就是自己解决（不会真的有人认为答案之书有用吧？不会吧不会吧？'
     player = getPlayer(**kwargs)
     if attrs:
         if attrs[-1] in ('sub','sniff'):
-            overwriteSniffer(player,'#为什么e',r'\?')
-            appendSniffer(player,'#为什么e',r'\？')
-            appendSniffer(player,'#为什么e',r'¿')
-            appendSniffer(player,'#为什么e',r'吗')
-            appendSniffer(player,'#为什么e',r'怎么')
-            appendSniffer(player,'#为什么e',r'如何')
-            appendSniffer(player,'#为什么e',r'为什么')
+            overwriteSniffer(player,'#答案之书en',r'\?')
+            appendSniffer(player,'#答案之书en',r'\？')
+            appendSniffer(player,'#答案之书en',r'¿')
+            appendSniffer(player,'#答案之书en',r'吗')
+            appendSniffer(player,'#答案之书en',r'怎么')
+            appendSniffer(player,'#答案之书en',r'如何')
+            appendSniffer(player,'#答案之书en',r'为什么')
             return [Plain('【book of answers】sniff mode on')]
         elif attrs[-1] in GLOBAL.unsubscribes:
-            removeSniffer(player,'#为什么e')
+            removeSniffer(player,'#答案之书en')
             return [Plain('【book of answers】sniff mode off')]
     dynamic_answers = [f"http://iwo.im/?q={quote(' '.join(attrs))}"]
     ans = random.choice(book_of_answers_en+dynamic_answers)
     return [Plain(ans.strip())]
 
-def KMP(*attrs,**kwargs):
-    pat,s = ' '.join(attrs).split(',')
+async def KMP(*attrs,kwargs={}):
+    pat, s = attrs[0], attrs[1]
     fail = [-1]
     fval = [-1]
     p1 = 0 
@@ -925,19 +935,17 @@ functionMap = {
     '#a2m':转电码,
     '#m2a':译电码,
     '#m2z':译中文电码,
-    '#为什么':答案之书,
-    '#为什么e':答案之书en,
     '#repeat':復讀,
     '#KMP':KMP
 }
 
 shortMap = {
-    '#ans':'#为什么',
-    '#why':'#为什么',
-    '#wsm':'#为什么',
-    '#anse':'#为什么e',
-    '#whye':'#为什么e',
-    '#wsme':'#为什么e'
+    '#ans':'#答案之书',
+    '#why':'#答案之书',
+    '#wsm':'#答案之书',
+    '#anse':'#答案之书en',
+    '#whye':'#答案之书en',
+    '#wsme':'#答案之书en'
 }
 
 functionDescript = {
@@ -979,8 +987,6 @@ functionDescript = {
     #m2z _7093__2448__5530__5358_ split=_
     使用_作为电码"_7093__2448__5530__5358_"的分隔符
 ''',
-    '#为什么':'向答案之书提问（答非所问（问就是自己解决（不会真的有人认为答案之书有用吧？不会吧不会吧？',
-    '#为什么e':'向答案之书（英文）提问（答非所问（问就是自己解决（不会真的有人认为答案之书有用吧？不会吧不会吧？',
     '#KMP':
 '''
 生成KMP算法的fail数组和EXKMP的next和extent数组

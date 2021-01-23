@@ -1,4 +1,5 @@
 """爬虫类"""
+from asyncio.tasks import sleep
 import os
 
 from requests.exceptions import Timeout
@@ -36,12 +37,11 @@ import time
 import datetime
 import urllib
 import mido
-import imageio
 import GLOBAL
 from Utils import *
 importMirai()
 
-def 没救了(*attrs,**kwargs):
+async def 没救了(*attrs,kwargs={}):
     r = requests.get(f'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports/{tnow().strftime("%m-%d-%Y")}.csv',proxies=GLOBAL.proxy)
     if r.status_code==404:
         print('没有今天的')
@@ -79,7 +79,7 @@ def 没救了(*attrs,**kwargs):
 
     return [Plain('\n\n'.join(s))]
 
-def 爬一言(*attrs,**kwargs):
+async def 爬一言(*attrs,kwargs={}):
     dst = ' '.join(attrs)
     for _ in ('f','sl','nm','cao','你妈','屌','mmp','傻逼','妈逼','操'):
         if _ in dst.lower():
@@ -90,7 +90,7 @@ def 爬一言(*attrs,**kwargs):
     j = json.loads(tmp.text)
     return [Plain(text=j['hitokoto'])]
 
-def 爬OIWiki(*attrs,**kwargs):
+async def 爬OIWiki(*attrs,kwargs={}):
     lnk = 'https://oi-wiki.org/'
     if len(attrs):
         query = ' '.join(attrs)
@@ -138,13 +138,13 @@ def 爬OIWiki(*attrs,**kwargs):
     print(url)
 
     save_fn=randstr(GLOBAL.randomStrLength)+"tmpLearn"+str(kwargs['gp'].id)+'.png'
-    ostr += renderHtml(url,save_fn)
+    ostr += await renderHtml(url,save_fn)
     
     asyncio.ensure_future(rmTmpFile(save_fn),loop=None)
     ostr.append(generateImageFromFile(save_fn))
     return ostr
 
-def 爬萌娘(*attrs,**kwargs):
+async def 爬萌娘(*attrs,kwargs={}):
     lnk = 'https://zh.moegirl.org/Special:%E9%9A%8F%E6%9C%BA%E9%A1%B5%E9%9D%A2'
     if len(attrs):
         keyWord = ' '.join(attrs)
@@ -164,11 +164,11 @@ def 爬萌娘(*attrs,**kwargs):
         else:
             lnk = 'https://zh.moegirl.org'+res.find('a')['href']
     save_fn=randstr(GLOBAL.randomStrLength)+"tmpMoe"+str(kwargs['mem'].id)+'.png'
-    l = renderHtml(lnk,save_fn)
+    l = await renderHtml(lnk, save_fn)
     asyncio.ensure_future(rmTmpFile(save_fn),loop=None)
     return l+[generateImageFromFile(save_fn)]
 
-def 爬OEIS(*attrs,**kwargs):
+async def 爬OEIS(*attrs,kwargs={}):
     if attrs:
         for i in attrs[0].split(','):
             if not i.isdigit():
@@ -190,7 +190,7 @@ def 爬OEIS(*attrs,**kwargs):
     else:
         return [Plain('输入格式需为半角逗号分隔的整数')]
 
-def 爬CF(*attrs,**kwargs):
+async def 爬CF(*attrs,kwargs={}):
     try:
         gp = kwargs['gp'].id
     except:
@@ -227,13 +227,14 @@ def 爬CF(*attrs,**kwargs):
                 li.append(Plain(f'有正在进行的比赛：{v["title"]}\n\n'))
             else:
                 li.append(Plain(v['title']+'  '))
-                li.append(Plain(','.join(v['authors'])+'  '))
                 li.append(Plain(v['routine'].strftime('%Y/%b/%d %H:%M')+'  '))
                 li.append(Plain(v['length']+'  '))
                 li.append(Plain(v['countdown']+'\n'))  
+    if not li:
+        li = '没有即将开始的比赛'
     return li
 
-def 爬AtCoder(*attrs,**kwargs):
+async def 爬AtCoder(*attrs,kwargs={}):
     try:
         gp = kwargs['gp'].id
     except:
@@ -275,7 +276,7 @@ def 爬AtCoder(*attrs,**kwargs):
         li.append(Plain('已自动订阅AtCoder的比赛提醒服务，取消请使用#AT reset'))
     return li
 
-def 爬LaTeX(*attrs,**kwargs):
+async def 爬LaTeX(*attrs,kwargs={}):
     base = r'\dpi{150} \bg_white \large ' + ' '.join(attrs).replace('+','&plus;')
     r = requests.get('https://latex.vimsky.com/test.image.latex.php?fmt=png&dl=0&val='+urllib.parse.quote(urllib.parse.quote(base)))
     fn = f"tmpLaTeX{randstr(3)}.png"
@@ -284,7 +285,7 @@ def 爬LaTeX(*attrs,**kwargs):
     asyncio.ensure_future(rmTmpFile(fn))
     return [generateImageFromFile(fn)]
 
-def 爬牛客(*attrs,**kwargs):
+async def 爬牛客(*attrs,kwargs={}):
     try:
         gp = kwargs['gp'].id
     except:
@@ -322,9 +323,10 @@ def 爬牛客(*attrs,**kwargs):
 
     return li
         
-def 爬歌(*attrs,**kwargs):
+async def 爬歌(*attrs,kwargs={}):
     keyword = urllib.parse.quote(''.join(attrs))
     ans = []
+    lnks = []
     try:
         kuwolnk = f'http://www.kuwo.cn/api/www/search/searchMusicBykeyWord?key={keyword}&pn=1&rn=30'
 
@@ -345,12 +347,13 @@ def 爬歌(*attrs,**kwargs):
             'user-agent': 'okhttp/3.10.0'
         })
         print(r.text)
-        ans.append('来自酷我的检索：')
+        ans.append('酷我：')
         ans.append(j['data']['list'][0]['name']+' '+j['data']['list'][0]['artist'])
         ans.append(r.text)
+        lnks.append(ans[-1])
         ans.append('')
     except:
-        ans.append('酷我爬虫炸了')
+        ans.append('酷我炸了')
         print(traceback.format_exc())
 
     try:
@@ -361,12 +364,13 @@ def 爬歌(*attrs,**kwargs):
         fid = j['data']['lists'][0]['FileHash']
         lnk2 = f'http://trackercdn.kugou.com/i/v2/?key={hashlib.md5(bytes(fid+"kgcloudv2","utf-8")).hexdigest()}&hash={fid}&br=hq&appid=1005&pid=2&cmd=25&behavior=play'
         rr = ses.get(lnk2)
-        ans.append('来自酷狗的检索：')
+        ans.append('酷狗：')
         ans.append(j['data']['lists'][0]['FileName'])
         ans.append(json.loads(rr.text)['url'][0])
+        lnks.append(ans[-1])
         ans.append('')
     except:
-        ans.append('酷狗爬虫炸了')
+        ans.append('酷狗炸了')
         print(traceback.format_exc())
 
     try:
@@ -384,12 +388,13 @@ def 爬歌(*attrs,**kwargs):
         rr = ses.get(lnk2,headers=xiamihds)
         print(rr.text)
         print(json.loads(rr.text)['data']['song']['listen_file'])
-        ans.append('来自虾米的检索：')
+        ans.append('虾米：')
         ans.append(fname)
         ans.append(json.loads(rr.text)['data']['song']['listen_file'])
+        lnks.append(ans[-1])
         ans.append('')
     except:
-        ans.append('虾米爬虫炸了')
+        ans.append('虾米炸了')
         print(traceback.format_exc())
     try:
         hds = {
@@ -427,19 +432,27 @@ def 爬歌(*attrs,**kwargs):
         sip = jj['sip'][0]
 
         if jj['midurlinfo'][0]['purl']:
-            ans.append('来自QQ的检索：')
+            ans.append('QQ：')
             ans.append(fname)
             ans.append(sip+jj['midurlinfo'][0]['purl'])
+            lnks.append(ans[-1])
             ans.append('')
         else:
             raise NameError('QQ没权限拿歌')
     except:
-        ans.append('QQ爬虫炸了')
+        ans.append('mhtsl')
         print(traceback.format_exc())
     print(ans)
-    return [Plain('\n'.join(ans))]
+    print(lnks)
+    kwargs['voices'] = lnks
+    # if 'gp' in kwargs:
+    #     voices = [
+    #         GLOBAL.app.uploadVoice(getFileBytes(i)) for i in lnks
+    #     ]
+    #     return [Plain('\n'.join(ans))]+voices
+    return [Plain('\n'.join(ans))]#+[Voice(url=i) for i in lnks]
 
-def 爬天气(*attrs,**kwargs):
+async def 爬天气(*attrs,kwargs={}):
     player = getPlayer(**kwargs)
     if not attrs:
         return [Plain('【错误】没有传入的命令\n' + SpiderDescript['#天气'])]
@@ -462,7 +475,7 @@ def 爬天气(*attrs,**kwargs):
         pass
     return [Plain('\n'.join(output))]
 
-def 爬每日一句(*attrs,**kwargs):
+async def 爬每日一句(*attrs,kwargs={}):
     player = getPlayer(**kwargs)
     if attrs:
         if attrs[0] in GLOBAL.unsubscribes:
@@ -488,7 +501,7 @@ def 爬每日一句(*attrs,**kwargs):
     else:
         return [Plain('\n'.join(output['plain']))]
 
-def 爬ip(*attrs,**kwargs):
+async def 爬ip(*attrs,kwargs={}):
     if not attrs:
         return [Plain('没有输入ip哦\n'+SpiderDescript['#ip'])]
     ip = attrs[0]
@@ -504,7 +517,7 @@ def 爬ip(*attrs,**kwargs):
     ans = [' '.join(i) for i in rr]
     return [Plain('\n'.join(ans))]
 
-def 反爬ip(*attrs,**kwargs):
+async def 反爬ip(*attrs,kwargs={}):
     if not attrs:
         return [Plain('没有输入地址哦\n'+SpiderDescript['#addr'])]
     kw = ' '.join(attrs)
@@ -519,7 +532,7 @@ def 反爬ip(*attrs,**kwargs):
     ans = [' '.join(i) for i in rr]
     return [Plain('\n'.join(ans))]
 
-def 爬what_anime(*attrs,**kwargs):
+async def 爬what_anime(*attrs,kwargs={}):
     '''
     爬取whats_anime的番剧信息
     '''
@@ -546,7 +559,7 @@ def 爬what_anime(*attrs,**kwargs):
         if info_li[8]:
             ret.append(Plain(f'结果可能包含成人内容……\n'))
             return
-        res2=requests.get('https://trace.moe/thumbnail.php?anilist_id={}&file={}&t={}&token={}'.format(info_li[4],info_li[5],info_li[6],info_li[7]),timeout=10)
+        res2=requests.get('https://trace.moe/thumbnail.php?anilist_id={}&file={}&t={}&token={}'.format(info_li[4],info_li[5],info_li[6],info_li[7]),timeout=20)
         #res2=requests.get(f'https://media.trace.moe/video/{info_li[4]}/{info_li[5]}?t={info_li[6]}&token={info_li[7]}',timeout=20)
         if res2.status_code==200:
             prew = f"tmpAni{randstr(3)}.png"
@@ -570,10 +583,9 @@ def 爬what_anime(*attrs,**kwargs):
 
         return ans
 
-
     if 'pic' in kwargs and kwargs['pic']:
-        pic_url=kwargs['pic']
-        res=requests.get('https://trace.moe/api/search',params={'url':pic_url},timeout=10)
+        pic_url=kwargs['pic'].url
+        res=requests.get('https://trace.moe/api/search',params={'url':pic_url},timeout=20)
         if res.status_code==200:
             ret=[] #保存返回结果
             info=res.json()
@@ -588,9 +600,67 @@ def 爬what_anime(*attrs,**kwargs):
             return ret
         else:
             return [Plain(f'搜素过程中发生了一点问题：{res.status_code}')]
-        
-def 动图测试(*attrs,**kwargs):
-    return [generateImageFromFile('68747470733a2f2f696d616765732e706c75726b2e636f6d2f376c55526164787959567276506c35324d376d6d33472e676966.gif')]
+    else:
+        return [Plain('您没发图哥哥！')]
+
+async def 刷CF(*attrs,kwargs={}):
+    """爬取给定用户的做题记录。
+    用例：#刷CF bot_yaya"""
+    usr = attrs[0]
+    res = requests.get(f'https://codeforces.com/api/user.status?handle={usr}')
+
+    j = res.json()
+    problems = {}
+    accept_count = 0
+    tried_count = 0
+
+    for i in j['result']:
+        na = i.get('problemsetName', '')
+        na = i.get('contestId', na)
+        ind = i.get('index', '')
+        identity = f'{na}{ind}'
+        verdict = i.get('verdict', '')
+        if identity in problems:
+            if problems[identity] == 'OK': continue
+            elif verdict == 'OK':
+                accept_count += 1
+                tried_count -= 1
+                problems[identity] = 'OK'
+        else:
+            if verdict == 'OK':
+                accept_count += 1
+                problems[identity] = 'OK'
+            else:
+                tried_count += 1
+                problems[identity] = verdict
+    return [Plain(
+        f"""用户{usr}的CF刷题记录：
+    通过{accept_count}题
+    试过{tried_count}题"""
+    )]
+
+async def 对(*attrs,kwargs={}):
+    """给出上句对下句"""
+    couplet_hds = {
+        "Accept":"*/*",
+        "Accept-Encoding":"gzip, deflate, br",
+        "Accept-Language":"zh-CN,zh;q=0.9",
+        "Cache-Control":"no-cache",
+        "Connection":"keep-alive",
+        "DNT":"1",
+        "Host":"ai-backend.binwang.me",
+        "Origin":"https://ai.binwang.me",
+        "Pragma":"no-cache",
+        "Referer":"https://ai.binwang.me/couplet/",
+        "Sec-Fetch-Dest":"empty",
+        "Sec-Fetch-Mode":"cors",
+        "Sec-Fetch-Site":"same-site",
+        "User-Agent":"Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.198 Safari/537.36"
+    }
+    couplet_lnk = f"https://ai-backend.binwang.me/chat/couplet/{''.join(attrs).strip()}"
+    resp = requests.get(couplet_lnk, headers=couplet_hds).json()['output']
+    return [Plain(resp)]
+
 
 functionMap = {
     '#LaTeX':爬LaTeX,
@@ -607,8 +677,7 @@ functionMap = {
     '#ip':爬ip,
     '#addr':反爬ip,
     '#每日一句':爬每日一句,
-    '#搜番':爬what_anime,
-    '#动图测试':动图测试
+    '#搜番':爬what_anime
 }
 
 shortMap = {
@@ -622,7 +691,7 @@ shortMap = {
     '#yy':'#肛道理',
     '#tex':'#LaTeX',
     '#uta':'#什么值得听',
-    '#listen':'#什么值得听',
+    '#music':'#什么值得听',
     '#weather':'#天气',
 
 }

@@ -1,73 +1,30 @@
-import os
-import requests
 import asyncio
+import base64
+import copy
 import datetime
-
-from bs4 import BeautifulSoup
-from selenium import webdriver
-from selenium.webdriver.common.keys import Keys
-import traceback
+import functools
+import importlib
+import json
+import os
 import random
 import string
-import functools
-import GLOBAL
-import json
-from typing import *
-from PIL import Image as PImage
-from PIL import ImageFont,ImageDraw
-import base64
-import importlib
 import sys
+import traceback
+from typing import *
+
+import requests
+from bs4 import BeautifulSoup
+from PIL import Image as PImage
+from PIL import ImageDraw, ImageFont
+from selenium import webdriver
+from selenium.webdriver.common.keys import Keys
+
+import GLOBAL
 from Fetcher import *
-# from mirai.face import QQFaces
-# from mirai import Mirai, Plain, MessageChain, Friend, Face, MessageChain, Group, Image, Member, At, Source
-
-# from graia.application import GraiaMiraiApplication as Mirai
-# from graia.application import Session
-# from graia.application.event.messages import FriendMessage,GroupMessage
-# from graia.application.event.lifecycle import ApplicationLaunched,ApplicationShutdowned
-# from graia.application.message.chain import MessageChain
-# from graia.application.message.elements.internal import Plain, Image, At, Face, Source
-# from graia.broadcast import Broadcast
-# from graia.application.group import Group,Member
-# from graia.application.friend import Friend
-
-def importMirai():
-    global Mirai, Session, FriendMessage, GroupMessage, ApplicationLaunched, ApplicationShutdowned
-    global MessageChain, Plain, Image, At, Face, Source, Broadcast, Group, Member, Friend, QQFaces
-    try:
-        if GLOBAL.py_mirai_version == 3:raise ImportError
-        Mirai = getattr(importlib.import_module("graia.application"),"GraiaMiraiApplication")
-        Session = getattr(importlib.import_module("graia.application"),"Session")
-        FriendMessage = getattr(importlib.import_module("graia.application.event.messages"),"FriendMessage")
-        GroupMessage = getattr(importlib.import_module("graia.application.event.messages"),"GroupMessage")
-        ApplicationLaunched = getattr(importlib.import_module("graia.application.event.lifecycle"),"ApplicationLaunched")
-        ApplicationShutdowned = getattr(importlib.import_module("graia.application.event.lifecycle"),"ApplicationShutdowned")
-        MessageChain = getattr(importlib.import_module("graia.application.message.chain"),"MessageChain")
-        Plain = getattr(importlib.import_module("graia.application.message.elements.internal"),"Plain")
-        Image = getattr(importlib.import_module("graia.application.message.elements.internal"),"Image")
-        At = getattr(importlib.import_module("graia.application.message.elements.internal"),"At")
-        Face = getattr(importlib.import_module("graia.application.message.elements.internal"),"Face")
-        Source = getattr(importlib.import_module("graia.application.message.elements.internal"),"Source")
-        Broadcast = getattr(importlib.import_module("graia.broadcast"),"Broadcast")
-        Group = getattr(importlib.import_module("graia.application.group"),"Group")
-        Member = getattr(importlib.import_module("graia.application.group"),"Member")
-        Friend = getattr(importlib.import_module("graia.application.friend"),"Friend")
-        GLOBAL.py_mirai_version = 4
-    except ImportError:
-        Mirai = getattr(importlib.import_module("mirai"),"Mirai")
-        Plain = getattr(importlib.import_module("mirai"),"Plain")
-        MessageChain = getattr(importlib.import_module("mirai"),"MessageChain")
-        Friend = getattr(importlib.import_module("mirai"),"Friend")
-        Face = getattr(importlib.import_module("mirai"),"Face")
-        MessageChain = getattr(importlib.import_module("mirai"),"MessageChain")
-        Group = getattr(importlib.import_module("mirai"),"Group")
-        Image = getattr(importlib.import_module("mirai"),"Image")
-        Member = getattr(importlib.import_module("mirai"),"Member")
-        At = getattr(importlib.import_module("mirai"),"At")
-        Source = getattr(importlib.import_module("mirai"),"Source")
-        QQFaces = getattr(importlib.import_module("GLOBAL"),"QQFaces")
-        GLOBAL.py_mirai_version = 3
+from GLOBAL import (ApplicationLaunched, ApplicationShutdowned, At, Broadcast,
+                    Face, Friend, FriendMessage, Group, GroupMessage, Image,
+                    Member, MessageChain, Mirai, Plain, QQFaces, Session,
+                    Source, Voice, importMirai)
 
 importMirai()
 
@@ -82,7 +39,13 @@ youbi = {
 }
 
 from GLOBAL import SessionConfigures
-def chkcfg(player):return GLOBAL.cfgs.setdefault(player,SessionConfigures(player))
+
+
+def chkcfg(player):
+    player = int(player)
+    return GLOBAL.cfgs.setdefault(player,SessionConfigures(player))
+
+def getmem(mono): return mono.id if getattr(mono, 'id', None) else int(mono)
 
 def getPlainText(p:Plain) -> str:
     """做v3和v4的Plain兼容"""
@@ -99,124 +62,6 @@ def generateImageFromFile(fn:str) -> Image:
     if GLOBAL.py_mirai_version == 3: return Image.fromFileSystem(fn)
     else: return Image.fromLocalFile(fn)
 
-async def WeatherSubscribeRoutiner():
-    print('进入回环(天气预报')
-    if not os.path.exists('weather/'):
-        os.mkdir('weather/')
-    while 1:
-
-        print(f'weather report waiting for {86400+5-(datetime.datetime.now().timestamp()+8*3600)%86400}')
-        await asyncio.sleep(86400+5-(datetime.datetime.now().timestamp()+8*3600)%86400)
-
-        for _ in os.listdir('weather/'):
-            try:
-                with open('weather/'+_,'r') as f:
-                    dt = datetime.datetime.now()
-                    ans = [f'今天是{dt.year}年{dt.month}月{dt.day}日，{youbi[dt.isoweekday()]}']
-
-                    try:
-                        bs = BeautifulSoup(requests.get('https://wannianrili.51240.com/').text,'html.parser')
-                        res = bs('div',attrs={'id':'jie_guo'})
-                        ans.append('农历'+res[0].contents[0].contents[dt.day]('div',attrs={'class':"wnrl_k_you_id_wnrl_nongli"})[0].string)
-                        ans.append(res[0].contents[dt.day]('span',string='节气')[0].nextSibling.string)
-                    except:
-                        ans.append('我忘了今天农历几号了')
-                        print(traceback.format_exc())
-
-                    if random.randint(0,3):
-                        ans.append(random.choice(['还在盯着屏幕吗？','还不睡？等死吧','别摸了别摸了快点上床吧','白天再说.jpg','邀请你同床竞技']))
-
-                    for city in f.readlines():
-                        if city.strip():
-                            j = fetchWeather(city.strip())
-                            ans += j[:3]
-                asyncio.ensure_future(msgDistributer(msg='\n'.join(ans),typ='P',player=_))
-
-            except:
-                print('天气预报姬挂了！',traceback.format_exc())
-
-async def SentenceSubscribeRoutiner():
-    print('进入回环(每日一句')
-    if not os.path.exists('sentence/'):
-        os.mkdir('sentence/')
-    while 1:
-
-        print(f'sentence report waiting for {86400+5-(datetime.datetime.now().timestamp()+15*3600)%86400}')
-        await asyncio.sleep(86400+5-(datetime.datetime.now().timestamp()+15*3600)%86400)
-
-        for _ in os.listdir('sentence/'):
-            try:
-                d={}
-                fetchSentences(d)
-                if 'img' in d:
-                    asyncio.ensure_future(msgDistributer(msg=d['img'],typ='I',player=_))
-                asyncio.ensure_future(msgDistributer(msg='\n'.join(d['plain']),typ='P',player=_))
-
-            except:
-                print('每日一句挂了！',traceback.format_exc())
-
-async def JRRPclearRoutiner():
-    print('进入回环：清空人品（？）')
-    while 1:
-        print(f'JRRP clear waiting for {86400+5-(datetime.datetime.now().timestamp()+8*3600)%86400}')
-        await asyncio.sleep(86400+5-(datetime.datetime.now().timestamp()+8*3600)%86400) 
-
-        try:
-            GLOBAL.JRRP_map.clear()
-            asyncio.ensure_future(msgDistributer(msg='你昨天的人品已经被清除了——',typ='P',player=550247773345)) #player号码暂时这么写，别打我
-        except:
-            traceback.print_exc()
-            print('人品清除失败')
-
-async def CFLoopRoutiner():
-    print('进入回环(CF')
-    if not os.path.exists('CF/'):
-        os.mkdir('CF/')
-    while 1:
-        if any([_ for _ in os.listdir('CF/') if _[-4:]!='.png']):
-            j = fetchCodeForcesContests()
-            for _ in os.listdir('CF/'):
-                try:
-                    if _[-4:]!='.png':
-                        print(f'EXECUTING{_}')
-                        CFNoticeManager(j,gp=int(_))
-                except:
-                    print('CF爬虫挂了！',traceback.format_exc())
-        await asyncio.sleep(86400)
-
-async def ATLoopRoutiner():
-    print('进入回环(AT')
-    if not os.path.exists('AtCoder/'):
-        os.mkdir('AtCoder/')
-    while 1:
-        if any([_ for _ in os.listdir('AtCoder/') if _[-4:]!='.png']):
-            j = fetchAtCoderContests()
-            for _ in os.listdir('AtCoder/'):
-                try:
-                    if _[-4:]!='.png':
-                        OTNoticeManager(j['upcoming'],gp=int(_))
-                except:
-                    print('AT爬虫挂了！',traceback.format_exc())
-        await asyncio.sleep(86400)
-
-async def NCLoopRoutiner():
-    print('进入回环(NC')
-    if not os.path.exists('NowCoder/'):
-        os.mkdir('NowCoder/')
-    while 1:
-        if any([_ for _ in os.listdir('NowCoder/') if _[-4:]!='.png']):
-            j = fetchNowCoderContests()
-            for _ in os.listdir('NowCoder/'):
-                try:
-                    if _[-4:]!='.png':
-                        OTNoticeManager(j,gp=int(_))
-                except:
-                    print('NC爬虫挂了！',traceback.format_exc())
-        await asyncio.sleep(86400)
-
-async def rmTmpFile(fi:str):
-    await asyncio.sleep(60)
-    os.remove(fi)
 
 async def contestsBeginNotice(g,contest,ti):
     if ti<0:
@@ -237,7 +82,7 @@ async def CFProblemRender(g,cid,ti):
         GLOBAL.CFRenderFlag.add(cid)
         await asyncio.sleep(ti)
         base = 'https://codeforces.com/contest/'+cid+'/problems'
-        l = renderHtml(base,FN)
+        l = await renderHtml(base, FN)
         GLOBAL.CFRenderFlag.discard(ti)
         l.append(generateImageFromFile(FN))
         await msgDistributer(gp=g,list=l)
@@ -247,19 +92,53 @@ async def fuzzT(g,s,e,w=''):
         if _%10==0:
             await asyncio.sleep(0.2)
         await msgDistributer(gp=g,msg=f'{chr(_)}{_}{w}')
-
+# from graia.application.message.chain import MessageChain
+async def MessageChainSpliter(chain: list, **kwargs):
+    """只在v4工作的函数，把消息链拆开，一条条发送"""
+    if chain:
+        if 'player' in kwargs:
+            kwargs['player'] = int(kwargs['player'])
+            if kwargs['player'] > 1<<39:
+                for seq in chain:
+                    await GLOBAL.app.sendGroupMessage(kwargs['player']-(1<<39), MessageChain.create([seq]).asSendable())
+            else:
+                for seq in chain:
+                    await GLOBAL.app.sendFriendMessage(kwargs['player'], MessageChain.create([seq]).asSendable())
+        elif 'gp' in kwargs:
+            for seq in chain:
+                await GLOBAL.app.sendGroupMessage(kwargs['gp'], MessageChain.create([seq]).asSendable())
+        elif 'mem' in kwargs:
+            for seq in chain:
+                await GLOBAL.app.sendFriendMessage(kwargs['mem'], MessageChain.create([seq]).asSendable())
 
 async def msgDistributer(**kwargs):
     """
     根据player号分发消息
     输入字典msg为源文本，typ标识其类型('E'表情,'I'图片文件目录,'P'普通文本)
-    扩展了也可以扔消息元素列表(list)进来的功能
+用例：
+    await msgDistributer(msg="https://i.pximg.net/img-original/img/2020/09/27/19/46/09/84651430_p0.jpg",typ="I",player=114514)
+异步发送用例：
+    asyncio.ensure_future(msgDistributer(msg="https://i.pximg.net/img-original/img/2020/09/27/19/46/09/84651430_p0.jpg",typ="I",player=114514))
+也可以直接扔扔消息元素列表或者消息链(list)进来
+用例：
+    await msgDistributer(player=g,list=[At(mb),Plain(tit+'大限已至，我扔掉了。')])
     """
+    def chkempty(seq):
+        isempty = True
+        for ii in seq:
+            print(ii)
+            for i in ii[1]:
+                if isinstance(i, Plain):
+                    if i.text:
+                        return False
+                else:
+                    return False
+        return True
     seq = []
     
     if 'msg' in kwargs and kwargs['msg']:
         if kwargs.get('typ','P') == 'E':
-            seq = [Face(QQFaces[kwargs['msg']])]
+            seq = [Face(faceId=QQFaces[kwargs['msg']])]
         elif kwargs.get('typ','P') == 'I':
             # print(base64.b64decode(kwargs['msg']))
             try: # 这个try用来判断msg是不是可解码的b64
@@ -283,20 +162,28 @@ async def msgDistributer(**kwargs):
         else:
             seq = [Plain(kwargs['msg'])]
 
+    need_compress = True
     if 'list' in kwargs and kwargs['list']:
-        seq += kwargs['list']
+        if not seq and isinstance(kwargs['list'], MessageChain): 
+            need_compress = False
+            seq = kwargs['list']
+        else:
+            seq += kwargs['list']
 
+    if need_compress: seq = await compressMsg(seq, extDict=kwargs)
+    print(f'\n{seq}\n')
     if seq:
+        if chkempty(seq): return
         if 'player' in kwargs:
             kwargs['player'] = int(kwargs['player'])
             if kwargs['player'] > 1<<39:
-                await GLOBAL.app.sendGroupMessage(kwargs['player']-(1<<39),compressMsg(seq))
+                await GLOBAL.app.sendGroupMessage(kwargs['player']-(1<<39), seq)
             else:
-                await GLOBAL.app.sendFriendMessage(kwargs['player'],compressMsg(seq))
+                await GLOBAL.app.sendFriendMessage(kwargs['player'], seq)
         elif 'gp' in kwargs:
-            await GLOBAL.app.sendGroupMessage(kwargs['gp'],compressMsg(seq))
+            await GLOBAL.app.sendGroupMessage(kwargs['gp'], seq)
         elif 'mem' in kwargs:
-            await GLOBAL.app.sendFriendMessage(kwargs['mem'],compressMsg(seq))
+            await GLOBAL.app.sendFriendMessage(kwargs['mem'], seq)
         
 async def msgSerializer(_i, **kwargs):
     p = getPlayer(**kwargs)
@@ -321,24 +208,261 @@ def smart_decorator(decorator):
         return decorator_proxy
     return decorator_proxy
 
-def tnow():return datetime.datetime.utcnow() + datetime.timedelta(hours=8)
+def tnow(): return datetime.datetime.utcnow() + datetime.timedelta(hours=8)
 
-def randstr(l:int) -> str:return ''.join(random.choices(string.ascii_letters+string.digits,k=l))
+binocular_calculate_map = {
+    '+': lambda x,y:x+y,
+    '-': lambda x,y:x-y,
+    '*': lambda x,y:x*y,
+    '/': lambda x,y:x/y,
+    '=': lambda x,y:x is y,
+    '==': lambda x,y:x==y,
+    '//': lambda x,y:x//y,
+    '%': lambda x,y:x%y,
+    '&&': lambda x,y:x and y,
+    '&': lambda x,y:x&y,
+    '||': lambda x,y:x or y,
+    '|': lambda x,y:x|y,
+    '^': lambda x,y:x^y,
+    '**': lambda x,y:x**y,
+    '<<': lambda x,y:x<<y,
+    '<': lambda x,y:x<y,
+    '>>': lambda x,y:x>>y,
+    '>': lambda x,y:x>y
+}
+
+unary_calculate_map = {
+    '-': lambda x:-x,
+    '~': lambda x:~x
+}
 
 
+def evaluate_expression(exp: str) -> Tuple[str, str]:
+    """处理不带空格和其他空字符的中缀表达式
+用例：
+    evaluate_expression('114+514')
+返回值：
+    [str]计算执行顺序表达字符串, [str]计算结果"""
+    operators = [] # 除括号和单目外，优先级单调递增
+    operands = []
+    operands_str = []
+    x = []
+    xx = []
+    xpower = []
 
-def generateTmpFileName(pref,ext='.png',**kwargs):
+    suffix_exp = [] # 放2元组(本体, 类型)罢了
+
+    last_mono = 'ope'
+    cur_operator = '' # 只放双目
+    float_token = False
+    decimal_token = False
+    hex_token = False
+    octal_token = False
+    binary_token = False
+    complex_token = False
+
+    def binocular_calculate(f: str, op):
+        A = op.pop()
+        B = op.pop()
+        op.append(binocular_calculate_map[f](B,A))
+        print("bino calculated:", op[-1])
+    def unary_calculate(f: str, op):
+        A = op.pop()
+        op.append(unary_calculate_map[f](A))
+        print("unary calculated:", op[-1])
+    def binocular_concate(f: str, op):
+        A = op.pop()
+        B = op.pop()
+        op.append(f"({B}{f}{A})")
+        print("bino concated:", op[-1])
+    def unary_concate(f: str, op):
+        A = op.pop()
+        op.append(f"({f}{A})")
+        print("unary concated:", op[-1])
+
+    def handle_operand():
+        nonlocal x, xx, suffix_exp, float_token, complex_token, last_mono, decimal_token, xpower
+        nonlocal hex_token, octal_token, binary_token
+        handled = ''.join(x)
+        if float_token:
+            handled += '.' + ''.join(xx)
+        if decimal_token:
+            handled += 'e' + ''.join(xpower)
+        if complex_token:
+            handled += 'j'
+        if handled:
+            print(f'Handled operand:{handled}')
+            if hex_token:
+                t = int(handled, 16)
+            elif octal_token:
+                t = int(handled, 8)
+            elif binary_token:
+                t = int(handled, 2)
+            elif complex_token:
+                t = complex(handled)
+            elif float_token or decimal_token or len(handled) > 1000:
+                t = float(handled)
+            else:
+                try:
+                    t = int(handled)
+                except:
+                    t = handled # 考虑未知数
+            suffix_exp.append((t, 'operand'))
+            last_mono = 'num'
+        float_token = False
+        complex_token = False
+        decimal_token = False
+        hex_token = False
+        octal_token = False
+        binary_token = False
+        x = []
+        xx = []
+        xpower = []
+
+
+    def calculate_suffix_exp():
+        nonlocal operands_str, operands
+        operands_str = copy.deepcopy(operands)
+        for op, typ in suffix_exp:
+            # op, typ = suffix_exp.pop()
+            try:
+                if typ == 'operand':
+                    operands_str.append(f'{op}')
+                    operands.append(op)
+                elif typ == 'unary':
+                    unary_concate(op, operands_str)
+                    unary_calculate(op, operands)
+                else:
+                    binocular_concate(op, operands_str)
+                    binocular_calculate(op, operands)
+            except:
+                operands = ["evaluate failed"]
+                
+    def maintain_stack():
+        nonlocal cur_operator
+        if cur_operator != '(':
+            while operators:
+                if operators[-1][1] == 'unary':
+                    suffix_exp.append(operators.pop())
+                else:
+                    if GLOBAL.binocular_operators[operators[-1][0]] >= GLOBAL.binocular_operators[cur_operator]:
+                        suffix_exp.append(operators.pop())
+                    else:
+                        break
+        operators.append((cur_operator, 'binocular'))
+        cur_operator = ''
+
+    for c in exp:
+        if c == '-' and decimal_token and not xpower:
+            xpower.append(c)
+        elif c == 'b' and x == ['0']:
+            binary_token = True
+            x.append(c)
+        elif c == 'o' and x == ['0']:
+            octal_token = True
+            x.append(c)
+        elif c == 'x' and x == ['0']:
+            hex_token = True
+            x.append(c)
+        elif c in 'abcdefABCDEF' and hex_token:
+            x.append(c)
+            # c in '.je' + string.digits:
+        elif c in GLOBAL.operator_charset:
+            handle_operand()
+            if c == ')':
+                while operators[-1][0]!='(':
+                    suffix_exp.append(operators.pop())
+                operators.pop()
+                last_mono = 'num'
+
+            elif cur_operator in GLOBAL.binocular_operators and c in ('-', '~'):
+                maintain_stack()
+                operators.append((c, 'unary'))
+                last_mono = 'ope'
+            elif cur_operator in GLOBAL.binocular_operators and c == '(':
+                maintain_stack()
+                operators.append((c, 'binocular'))
+                last_mono = 'ope'
+            elif last_mono == 'ope' and c in ('-', '~'):
+                operators.append((c, 'unary'))
+            elif last_mono == 'ope' and c == '(':
+                operators.append((c, 'binocular'))    
+            elif cur_operator + c in GLOBAL.binocular_operators:
+                cur_operator += c
+        else:
+            if cur_operator:
+                maintain_stack()
+                last_mono = 'ope'
+            if c == '.':
+                float_token = True
+            elif c == 'j':
+                complex_token = True
+            elif c == 'e':
+                decimal_token = True
+            else:
+                if decimal_token:
+                    xpower.append(c)
+                elif float_token:
+                    xx.append(c)
+                else:
+                    x.append(c)
+            
+
+    handle_operand()
+
+    if cur_operator:
+        maintain_stack()
+        operators.append((cur_operator, 'binocular'))
+
+    while operators:
+        suffix_exp.append(operators.pop())
+    print(suffix_exp)
+    extmsg = f'{[i[0] for i in suffix_exp]}'
+    calculate_suffix_exp()
+    return f'{extmsg}\n{operands_str[0]}', str(operands[0])
+
+
+def getCredit(user: int) -> int:
+    """"获取给定用户的信用点
+参数：
+    [int]user(QQ号)
+返回：
+    [int]用户的信用点"""
+    if not os.path.exists(f'credits/{user}'):        
+        return 500
+    else:
+        with open(f'credits/{user}', 'r') as f:
+            return int(f.read().strip())
+
+def updateCredit(user: int, operator: str, val: int) -> bool: # 危
+    """修改用户的信用点
+参数：
+    [int]user(QQ号)
+    [str]operator(操作符)
+    [int]val(操作数)
+返回：
+    [bool]是否操作成功
+用例：
+    updateCredit(114514, '+', 1) # 让
+    """
+    if operator not in GLOBAL.credit_operators: return False
+    c = getCredit(user)
+    c, c2 = evaluate_expression(f'{c}{operator}{int(val)}')
+    c2 = c2.strip()
+    with open(f'credits/{user}', 'w') as f:
+        f.write(f'{c2}')
+    return True
+
+def generateTmpFileName(pref='', ext='.png', **kwargs):
+    """生成一个临时文件名"""
     return f'''tmp{pref}{randstr(GLOBAL.randomStrLength)}{ext}'''
 
-def compressMsg(l,extDict={}):
+async def compressMsg(l, extDict={}):
     """会把Plain对象展开，但同时也会打乱由图片，文字，回复等成分组成的混合消息链"""
     print(extDict)
-    player = extDict.get("player",0)
+    player = int(extDict.get("player",0))
     tc = chkcfg(player)
-    theme = int(extDict.get("-theme", 255))
-    theme = int(extDict.get("-t", theme))
-    offset = tc.font_size >> 1
-    print(offset)
+    
     nl = []
     others = []
     for i in l:
@@ -346,12 +470,47 @@ def compressMsg(l,extDict={}):
             nl.append(getPlainText(i))
         else:
             others.append(i)
-    print(others)
     s = ''.join(nl)
-    if len(s) > tc.compress_threshold or "-force-image" in extDict or "-fi" in extDict:
-        
-        font = ImageFont.truetype('sarasa-gothic-ttf-0.12.5/sarasa-ui-tc-bold.ttf',GLOBAL.compressFontSize)
-        
+
+    if ('-tts' in extDict or '-TTS' in extDict) and s:
+        extDict['voices'] = [BaiduTTS(s)]
+        extDict['-voice'] = True
+
+    elif ('-fltts' in extDict or '-FLTTS' in extDict) and s:
+        out = FLTTS(s, extDict['-fltts'])
+        byte = getFileBytes(out)
+        voi = await GLOBAL.app.uploadVoice(byte)
+        asyncio.ensure_future(MessageChainSpliter([voi], **extDict))
+    
+    if "-paste" in extDict and s:
+
+        data = {
+            "poster":"irori",
+            "syntax": extDict.get("-syntax", "text"),
+            "expiration":"day",
+            "content":s
+        }
+        # asyncio.ensure_future(msgDistributer(list=[Plain(requests.post("https://paste.ubuntu.com/", data=data).url)], **extDict))
+        l = [Plain(requests.post("https://paste.ubuntu.com/", data=data).url)] + others
+    elif len(s) > tc.compress_threshold or "-force-image" in extDict or "-fi" in extDict:
+        A = int(extDict.get("-A", 255))
+        try:
+            theme = extDict.get("-t", "0xFF")
+            theme = extDict.get("-theme", theme)
+            theme = int(theme, 16)
+            R = (theme & 0xFF0000) >> 16
+            G = (theme & 0x00FF00) >> 8
+            B = theme & 0xFF
+        except TypeError: pass
+        except: traceback.print_exc()
+        finally:
+            theme = int(extDict.get("-t", 255))
+            theme = int(extDict.get("-theme", theme))
+            R = 255-theme
+            G = 255-theme
+            B = 255-theme
+        offset = tc.font_size >> 1
+        font = ImageFont.truetype('Assets/sarasa-gothic-ttf-0.12.5/sarasa-ui-tc-bold.ttf',GLOBAL.compressFontSize)
         sl = s.split('\n')
         height = len(sl)
         width = 0
@@ -361,7 +520,7 @@ def compressMsg(l,extDict={}):
         layer2 = PImage.new(
             'RGBA',
             (width * (GLOBAL.compressFontSize), (height) * (GLOBAL.compressFontSize +offset)),
-            (255 - theme, 255 - theme, 255 - theme, 255)
+            (R, G, B, A)
         )
         p = generateTmpFileName('ZIP')
         # PImage.alpha_composite(nyaSrc,layer2).save(p)
@@ -372,15 +531,109 @@ def compressMsg(l,extDict={}):
         layer2.save(p)
         asyncio.ensure_future(rmTmpFile(p))
         l = [generateImageFromFile(p)] + others
-
+        
+    
     if GLOBAL.py_mirai_version == 3:
         return l
     else:
+        if "-voice" in extDict and "voices" in extDict: # 不能超过1M
+            print(extDict['voices'])
+            for i in extDict['voices']:
+                fn = generateTmpFile(getFileBytes(i), fm=extDict.get('voices-fm', 'mp3'))
+                limit_conf = {
+                    'crop': limitAudioSizeByCut,
+                    'quan': limitAudioSizeByBitrate,
+                    'default': nolimitAudioSize
+                }
+                out = limit_conf[extDict.get('-lim', 'default')](fn)
+                byte = getFileBytes(out)
+                voi = await GLOBAL.app.uploadVoice(byte)
+                # print(f"voi ===> {voi}")
+                asyncio.ensure_future(MessageChainSpliter([voi], **extDict))
+        if not l: return False
         return MessageChain.create(l).asSendable()
 
-def getPlayer(**kwargs):
+import shlex
+
+def BaiduTTS(text: str) -> str:
+    """拿百度TTS的链接"""
+    return f'http://tts.baidu.com/text2audio?lan=zh&ie=UTF-8&spd=5&text={text}'
+
+
+def FLTTS(text, voice='slt') -> str:
+    v = voice if voice in {
+        'awb',
+        'kal',
+        'kal16',
+        'rms',
+        'slt'
+    } else 'slt'
+    dst = generateTmpFileName(ext='.amr')
+    t = "" if "'" in text else "'"
+    print(f'''ffmpeg -f lavfi -i flite=text={t}{shlex.quote(text)}{t}:voice={shlex.quote(v)} -codec amr_nb -ac 1 -ar 8000 {dst}''')
+    os.system(f'''ffmpeg -f lavfi -i flite=text={t}{shlex.quote(text)}{t}:voice={shlex.quote(v)} -codec amr_nb -ac 1 -ar 8000 {dst}''')
+    asyncio.ensure_future(rmTmpFile(dst))
+    return dst
+
+def generateTmpFile(b: bytes, fm='png') -> str:
+    """生成一个30s后会删掉的临时文件"""
+    fn = generateTmpFileName(ext=f'.{fm}')
+    with open(fn, 'wb') as f:
+        f.write(b)
+    asyncio.ensure_future(rmTmpFile(fn))
+    return fn
+    
+import platform
+
+
+def nolimitAudioSize(src) -> str:
+    dst = generateTmpFileName(ext='.amr')
+    if src[-3:] == "mid" and platform.system() != 'Windows':
+        os.system(f'timidity {src} -Ow -o - | ffmpeg -y -i - -codec amr_nb -ac 1 -ar 8000 {dst}')
+    else:
+        os.system(f'ffmpeg -y -i {src} -codec amr_nb -ac 1 -ar 8000 {dst}')
+    asyncio.ensure_future(rmTmpFile(dst))
+    return dst
+
+def limitAudioSizeByBitrate(src) -> str:
+    """依赖ffmpeg，生成一个临时文件，全 损 音 质"""
+    # lim = 8 * 1024 # 即1MB，大于1M发不出去
+    lim = 8000
+    dst = generateTmpFileName(ext='.amr')
+    dur = os.popen(f'ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 {src}').read()
+    dur = float(dur)
+    print(dur)
+    if src[-3:] == "mid" and platform.system() != 'Windows':
+        os.system(f'timidity {src} -Ow -o - | ffmpeg -y -i - -codec amr_nb -ac 1 -ar 8000 -b:a {lim / dur}k {dst}')
+    else:
+        os.system(f'ffmpeg -y -i {src} -codec amr_nb -ac 1 -ar 8000 -b:a {lim / dur}k {dst}')
+    asyncio.ensure_future(rmTmpFile(dst))
+    return dst
+
+def limitAudioSizeByCut(src) -> str:
+    """超出部分会被剪掉"""
+    dst = generateTmpFileName(ext='.amr')
+    if src[-3:] == "mid" and platform.system() != 'Windows':
+        os.system(f'timidity {src} -Ow -o - | ffmpeg -y - -codec amr_nb -ac 1 -ar 8000 -fs 1000K {dst}')
+    else:
+        os.system(f'ffmpeg -y -i {src} -codec amr_nb -ac 1 -ar 8000 -fs 1000K {dst}')
+    asyncio.ensure_future(rmTmpFile(dst))
+    return dst
+
+def getFileBytes(s):
+    if isinstance(s, bytes):
+        return s
+    elif s[:4] == 'http':
+        ret = requests.get(s).content
+        print(len(ret))
+        return ret
+    else:
+        with open(s, 'rb') as f:
+            return f.read()
+
+def getPlayer(**kwargs) -> int:
     """根据不定字典拿player号"""
-    if 'player' in kwargs: return kwargs['player']
+    if 'player' in kwargs: return int(kwargs['player'])
     if 'gp' in kwargs:
         try:
             player = kwargs['gp'].id + 2**39
@@ -391,7 +644,8 @@ def getPlayer(**kwargs):
             player = kwargs['mem'].id
         except:
             player = kwargs['mem']
-    return player
+    return int(player)
+
 
 
 def clearCFFuture(key,G,src):
@@ -436,12 +690,12 @@ def CFNoticeManager(j,**kwargs):
                 asy = asyncio.ensure_future(contestsBeginNotice(gp,v['title'],timew.total_seconds()))
                 CFNoticeQueue[k] = asy
                 asy.add_done_callback(functools.partial(clearCFFuture,k,gp))
-        if timew and feat == 'R' and k + 'RDR' not in CFNoticeQueue:
+        if timew and feat == 'R' and f"{k}RDR" not in CFNoticeQueue:
             asyR = asyncio.ensure_future(CFProblemRender(gp,k,timew.total_seconds()+3640))
-            CFNoticeQueue[k + 'RDR']=asyR
-            asyR.add_done_callback(functools.partial(clearCFFuture,k + 'RDR',gp))
-        elif feat == 'Y' and k + 'RDR' in CFNoticeQueue:
-            t = CFNoticeQueue.pop(k + 'RDR')
+            CFNoticeQueue[f"{k}RDR"]=asyR
+            asyR.add_done_callback(functools.partial(clearCFFuture,f"{k}RDR",gp))
+        elif feat == 'Y' and f"{k}RDR" in CFNoticeQueue:
+            t = CFNoticeQueue.pop(f"{k}RDR")
             t.cancel()
 
 def OTNoticeManager(j,**kwargs):
@@ -461,7 +715,7 @@ def OTNoticeManager(j,**kwargs):
 
 
 
-def renderHtml(dst_lnk, na) -> str:
+async def renderHtml(dst_lnk, na) -> str:
     """渲染dst_lnk的网页，保存为na，返回网页标题"""
     option = webdriver.ChromeOptions()
     option.add_argument('--headless')
@@ -500,25 +754,23 @@ def renderHtml(dst_lnk, na) -> str:
     driver.quit()
     return ostr
 
+# import warnings
 
-
-
-
-    
-
-def uploadToChaoXing(fn: Union[bytes,str]) -> str:
-    lnk = 'http://notice.chaoxing.com/pc/files/uploadNoticeFile'
-    if isinstance(fn,bytes):
-        r = requests.post(lnk,files = {'attrFile':fn})
-    else:
-        with open(fn,'rb') as f:
-            r = requests.post(lnk,files = {'attrFile':f})
-    j = json.loads(r.text)
-    return j['att_file']['att_clouddisk']['downPath']
+# def uploadToChaoXing(fn: Union[bytes,str]) -> str:
+#     warnings.warn("超星网盘现在要登录了", DeprecationWarning)
+#     lnk = 'https://notice.chaoxing.com/pc/files/uploadNoticeFile'
+#     if isinstance(fn,bytes):
+#         r = requests.post(lnk,files = {'attrFile':fn})
+#     else:
+#         with open(fn,'rb') as f:
+#             r = requests.post(lnk,files = {'attrFile':f})
+#     j = json.loads(r.text)
+#     return j['att_file']['att_clouddisk']['downPath']
 
 # 数论相关
 
 def comb(n,b):
+    """从n个数里面选b个的方案数"""
     res = 1
     b = min(b,n-b)
     for i in range(b):
@@ -541,7 +793,31 @@ def quickpow(x,p,m = -1):
             p>>=1
     return res
 
-def A000110_list(m, mod=0): # 集合的划分数
+def A072233_list(n: int, m: int, mod=0) -> list:
+    """n个无差别球塞进m个无差别盒子方案数"""
+    mod = int(mod)
+    f = [[0] * (m + 1)] * (n + 1)
+    f[0][0] = 1
+    for i in range(1, n+1):
+        for j in range(1, min(i+1, m+1)): # 只是求到m了话没必要打更大的
+            f[i][j] = f[i-1][j-1] + f[i-j][j]
+            if mod: f[i][j] %= mod
+    return f
+
+def A048993_list(n: int, m: int, mod=0) -> list:
+    """第二类斯特林数"""
+    mod = int(mod)
+    f = [1] + [0] * m
+    for i in range(1, n+1):
+        for j in range(min(m, i), 0, -1):
+            f[j] = f[j-1] + f[j] * j
+            if mod: f[j] %= mod
+        f[0] = 0
+    return f
+
+
+def A000110_list(m, mod=0):
+    """集合划分方案总和，或者叫贝尔数"""
     mod = int(mod)
     A = [0 for i in range(m)]
     # m -= 1
@@ -593,3 +869,5 @@ def calcinvs(array:list):
         invs += treearray_getsum(len(treearray)-1, treearray) - treearray_getsum(d[i], treearray)
         treearray_update(d[i],1,treearray)
     return invs
+
+

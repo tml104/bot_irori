@@ -33,50 +33,31 @@ import pexpect.popen_spawn
 import time
 import datetime
 import uuid
-import argparse
-# from mirai import MessageChain
+import xlrd
+import json5
 from Utils import *
+from Routiner import *
+from Sniffer import *
+from graia.broadcast.builtin.decoraters import Depend
 importMirai()
 identifier = uuid.uuid1().hex
 
-locate = re.findall("""来自：(.*?)\r\n""",requests.get('https://202020.ip138.com/',headers={
+locate = re.findall("""来自：(.*?)\n""",requests.get('https://2021.ip138.com/',headers={
     "Accept":"text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
     "Accept-Encoding":"gzip, deflate, br",
     "Accept-Language":"zh-CN,zh;q=0.9",
     "Cache-Control":"no-cache",
     "Connection":"keep-alive",
     "DNT":"1",
-    "Host":"202020.ip138.com",
+    "Host":"2021.ip138.com",
     "Pragma":"no-cache",
     "Referer":"https://www.ip138.com/",
     "Upgrade-Insecure-Requests":"1",
     "User-Agent":"Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/69.0.3497.100 Safari/537.36"
 }).text)[0]
 
-with open('authdata','r') as f:
-    qq = int(f.readline().strip())
-    authKey = f.readline().strip()
-    host = f.readline().strip() # httpapi所在主机的地址端口,如果 setting.yml 文件里字段 "enableWebsocket" 的值为 "true" 则需要将 "/" 换成 "/ws", 否则将接收不到消息.
 
-# print(dir(MessageChain))
-
-if GLOBAL.py_mirai_version == 3:
-    mirai_api_http_locate = host.replace('https://', '')
-    mirai_api_http_locate = mirai_api_http_locate.replace('http://', '')
-    irori = Mirai(f"mirai://{mirai_api_http_locate}?authKey={authKey}&qq={qq}")
-else:
-    loop = asyncio.get_event_loop()
-    irori = Broadcast(loop=loop)
-    app = Mirai(
-        broadcast = irori,
-        connect_info = Session(
-            host = host,
-            authKey = authKey,
-            account = qq,
-            websocket = False
-        )
-    )
-
+if not os.path.exists('credits/'): os.mkdir('credits/')
 try:
     with open('cfg.json','r',encoding='utf-8') as jfr:
         cfg = json.load(jfr)
@@ -112,16 +93,30 @@ except:
 
 import Callable
 
-def getmem(mono):return mono.id if getattr(mono,'id',None) else int(mono)
+from GLOBAL import irori, qqbot
 
-for k,v in banGroup.items():chkcfg(int(k)+2**39).restrict_cmd = set(v)
 
-for k,v in allowGroup.items():chkcfg(int(k)+2**39).allow_cmd = set(v)
+async def irori_statistics(
+    message: MessageChain,
+    member:Optional[Member]=None,
+    hurenzu:Optional[Friend]=None
+):
+    if member:
+        user = member.id
+    else:
+        user = hurenzu.id
+    chat = GLOBAL.chat_log.setdefault(user, [])
+    chat.append(message)
+
+
+for k,v in banGroup.items(): chkcfg(int(k)+2**39).restrict_cmd = set(v)
+
+for k,v in allowGroup.items(): chkcfg(int(k)+2**39).allow_cmd = set(v)
 
 
 SHELL = {}
 
-def sys_reload(member,player,s,extDict):importlib.reload(Callable);return '热重载完成'
+def sys_reload(member,player,s,extDict): importlib.reload(Callable); return '热重载完成'
 
 def sys_pull(member,player,s,extDict):
     if '-f' in extDict:c = 'git fetch --all && git reset --hard origin/master'
@@ -129,6 +124,8 @@ def sys_pull(member,player,s,extDict):
     return os.popen(c).read()
 
 def sys_exec(member,player,s,extDict):return f"""{exec(' '.join(s[1:]))}"""
+
+def sys_run(member,player,s,extDict):return f"""{os.popen(' '.join(s[1:])).read()}"""
 
 def sys_eval(member,player,s,extDict):return f"""{eval(' '.join(s[1:]))}"""
 
@@ -141,7 +138,7 @@ def sys_su(member,player,s,extDict):chkcfg(player).super_users.add(member);retur
 def sys_exit(member,player,s,extDict):chkcfg(player).super_users.add(member);return 'irori:~$'
 
 def sys_terminal(member,player,s,extDict):
-    if platform.platform().find('Windows') != -1:
+    if platform.system() == 'Windows':
         for i in s[1:]:
             if i in ('ps','powershell'):
                 SHELL[member] = pexpect.popen_spawn.PopenSpawn('powershell')
@@ -157,6 +154,7 @@ sys_dict = {
     'pull':sys_pull,
     'eval':sys_eval,
     'exec':sys_exec,
+    'run':sys_run,
     'pexc':sys_pexc,
     'cexc':sys_cexc,
     'su':sys_su,
@@ -164,7 +162,7 @@ sys_dict = {
     'terminal':sys_terminal,
 }
 
-def systemcall(member,player:int,s,extDict) -> (bool,str):
+async def systemcall(member,player:int,s,extDict) -> (bool,str):
     tc = chkcfg(player)
     if tc.enable_this:
         if member in SHELL:
@@ -194,16 +192,17 @@ def systemcall(member,player:int,s,extDict) -> (bool,str):
     elif s[0] == 'use':
         if s[1] in ('*',identifier):
             tc.enable_this = True
+            return True,f'{identifier}响应中'
         else:
             tc.enable_this = False
-        return True,f'{identifier}响应中'
+            return True,f'{identifier}已挂起'
     return False,''
 
 def msgprework(message: MessageChain, extDict: dict) -> list:
     """消息预处理，将特殊参数放进extDict"""
     tc = chkcfg(extDict['player'])
     s = getMessageChainText(message).split(' ')
-    if GLOBAL.py_mirai_version == 3:pic = message.getAllofComponent(Image)
+    if GLOBAL.py_mirai_version == 3: pic = message.getAllofComponent(Image)
     else:pic = message.get(Image)
 
     member:int = getmem(extDict['mem'])
@@ -211,8 +210,8 @@ def msgprework(message: MessageChain, extDict: dict) -> list:
     extDict['pics'] = pic
     if member in tc.super_users:extDict['sudo'] = True
     if s[0] == 'sudo':
-        s.pop(0)
         if member in masterID:
+            s.pop(0)
             extDict['sudo'] = True
     if GLOBAL.echoMsg:print(f"""{message}""")
     ns = []
@@ -220,13 +219,62 @@ def msgprework(message: MessageChain, extDict: dict) -> list:
         if i[:2] == "--":
             arg,*val = i[2:].split("=")
             extDict["-"+arg] = "".join(val)
-        elif i[:1] == "-":
-            arg,*val = i[1:].split("=")
-            extDict["-"+arg] = "".join(val)
         else: ns.append(i)
     return ns
 
-@irori.receiver("GroupMessage")
+
+async def cmdResolver(player, s, message, extDict) -> None:
+    print(extDict)
+    tc = chkcfg(player)
+    member = getmem(extDict['mem'])
+    try:
+        if 'sudo' in extDict:
+            is_called, output = await systemcall(member,player,s,extDict)
+            if is_called:
+                await msgDistributer(list=[Plain(output)], **extDict)
+                return
+        if not tc.enable_this:
+            return
+        a, *b = s
+        l = []
+        a = Callable.shorts.get(a, a)
+        
+        if a in Callable.funs:
+            
+            if a not in tc.restrict_cmd and (not tc.allow_cmd or a in tc.allow_cmd):
+
+                l = await Callable.funs[a](*b, kwargs=extDict)
+                if not isinstance(l, list):
+                    l = [Plain(f"{l}")]
+
+                if a in GLOBAL.credit_cmds:
+                    updateCredit(member, *GLOBAL.credit_cmds[a])
+                # if l:
+                await msgDistributer(list=l, **extDict)
+
+                return
+
+        if tc.quick_calls:
+            extDict['sniffer_invoke'] = True
+            # print(tc.quick_calls)
+            # print(getMessageChainText(message))
+            for ev,mono in dict(tc.quick_calls).items():
+                if ev not in tc.restrict_cmd and (not tc.allow_cmd or ev in tc.allow_cmd):
+                    for sniffKey in mono['sniff']:
+                        if re.search(sniffKey,getMessageChainText(message), re.S):
+                            l = await Callable.funs[ev](*mono['attrs'], *s, kwargs=extDict)
+                            if not isinstance(l, list):
+                                l = [Plain(f"{l}")]
+                            # if l:
+                            asyncio.ensure_future(msgDistributer(list=l, **extDict))
+                            break
+
+    except:
+        if tc.print_exception:
+            await msgDistributer(list=[Plain(traceback.format_exc())], **extDict)
+        return
+
+@irori.receiver("GroupMessage", headless_decoraters=[Depend(irori_statistics)])
 async def GroupHandler(message: MessageChain, app: Mirai, group: Group, member:Member):
     GLOBAL.app = app
     player = group.id+2**39
@@ -235,131 +283,26 @@ async def GroupHandler(message: MessageChain, app: Mirai, group: Group, member:M
         'mem':member,
         'player':player
     }
-    tc = chkcfg(player)
+
     s = msgprework(message,extDict)
-    member:int = getmem(extDict['mem'])
-    if member not in botList:
-        try:
-            if 'sudo' in extDict:
-                is_called,output=systemcall(member,player,s,extDict)
-                if is_called:
-                    await app.sendGroupMessage(group,compressMsg([Plain(output)],extDict))
-                    return
-        except:
-            if tc.print_exception:
-                await app.sendGroupMessage(group,compressMsg([Plain(traceback.format_exc())],extDict))
-            return
-        if not tc.enable_this:
-            return
-        a,*b = s
-        l = []
-        if a in Callable.shorts:
-            a = Callable.shorts[a]
-        
-        if a in Callable.funs:
-            
-            if a not in tc.restrict_cmd and (not tc.allow_cmd or a in tc.allow_cmd):
-                try:
-                    l = Callable.funs[a](*b, **extDict)
-                    if l is None:
-                        print(traceback.format_exc())
-                    else:
-                        print(f"MESSAGESLENGTH ===> {len(l)}")
-                    if l:
-                        await app.sendGroupMessage(group,compressMsg(l,extDict))
-                except:
-                    if l is None:
-                        l = []
-                    print(traceback.format_exc())
-                    if tc.print_exception:
-                        l.append(Plain(traceback.format_exc()))
-                    if l:
-                        await app.sendGroupMessage(group,compressMsg(l,extDict))
-                return
+    m = getmem(extDict['mem'])
+    if m not in botList:
+        await cmdResolver(player, s, message, extDict)
 
-        if tc.quick_calls:
-            print(tc.quick_calls)
-            try:
-                for ev,mono in dict(tc.quick_calls).items():
-                    if ev not in tc.restrict_cmd and (not tc.allow_cmd or ev in tc.allow_cmd):
-                        for sniffKey in mono['sniff']:
-                            if re.search(sniffKey,getMessageChainText(message),re.S):
-                                l = Callable.funs[ev](*mono['attrs'],*s,**extDict)
-                                if l:
-                                    asyncio.ensure_future(app.sendGroupMessage(group,compressMsg(l,extDict)))
-                                break
-
-            except:
-                if tc.print_exception:
-                    l.append(Plain(traceback.format_exc()))
-                if l:
-                    await app.sendGroupMessage(group,compressMsg(l,extDict))
-
-@irori.receiver("FriendMessage")
+@irori.receiver("FriendMessage", headless_decoraters=[Depend(irori_statistics)])
 async def FriendHandler(message: MessageChain, hurenzu: Friend, app: Mirai):
     GLOBAL.app = app
     player = hurenzu.id
-    tc = chkcfg(player)
 
     extDict = {
         'mem':hurenzu,
         'player':player
     }
-    member = getmem(hurenzu)
+
     s = msgprework(message,extDict)
 
     if hurenzu.id not in muteList:
-        
-        try:
-            if 'sudo' in extDict:
-                is_called,output=systemcall(member,player,s,extDict)
-                if is_called:
-                    await app.sendFriendMessage(hurenzu,compressMsg([Plain(output)],extDict))
-                    return
-        except:
-            if tc.print_exception:
-                await app.sendFriendMessage(hurenzu,compressMsg([Plain(traceback.format_exc())],extDict))
-            return
-        if not tc.enable_this:
-            return
-        a,*b = s
-        l = []
-        if a in Callable.shorts:
-            a = Callable.shorts[a]
-        
-        if a in Callable.funs: # 命令模块
-            if a not in tc.restrict_cmd and (not tc.allow_cmd or a in tc.allow_cmd):
-                try:
-                    
-                    l = Callable.funs[a](*b, **extDict)
-                    print(f"MESSAGESLENGTH ===> {len(l)}")
-                    if l:
-                        await app.sendFriendMessage(hurenzu,compressMsg(l,extDict))
-                except:
-                    print(traceback.format_exc())
-                    if tc.print_exception:
-                        l.append(Plain(traceback.format_exc()))
-                    if l:
-                        await app.sendFriendMessage(hurenzu,compressMsg(l,extDict))
-                return
-
-        if tc.quick_calls: # sniff模块
-            print(tc.quick_calls)
-            try:
-                for ev,mono in tc.quick_calls.items():
-                    if ev not in tc.restrict_cmd and (not tc.allow_cmd or ev in tc.allow_cmd):
-                        for sniffKey in mono['sniff']:
-                            if re.search(sniffKey,getMessageChainText(message),re.S):
-                                l = Callable.funs[ev](*mono['attrs'],*s,**extDict)
-                                if l:
-                                    asyncio.ensure_future(app.sendFriendMessage(hurenzu,compressMsg(l)))
-                                break
-
-            except:
-                if tc.print_exception:
-                    l.append(Plain(traceback.format_exc()))
-                if l:
-                    await app.sendFriendMessage(hurenzu,compressMsg(l,extDict))
+        await cmdResolver(player, s, message, extDict)
 
 async def hajime(bot):
     GLOBAL.app = bot
@@ -374,7 +317,7 @@ async def hajime(bot):
         global cfg
         print(cfg)
         for k_,v_ in cfg.get('onlineMsg',{}).items(): # 上线提醒
-            await bot.sendGroupMessage(int(k_),compressMsg([Plain(random.choice(v_))],{'player':int(k_)+2**39}))
+            await bot.sendGroupMessage(int(k_),await compressMsg([Plain(random.choice(v_))],{'player':int(k_)+2**39}))
     except:
         print('未设置登录提醒（不太重要')
         traceback.print_exc()
@@ -387,27 +330,58 @@ async def hajime(bot):
             print(jj)
             for j,v in jj.items(): # j是title，v是(时间,发送成员)
                 t = datetime.datetime.strptime(v[0],'%Y,%m,%d,%H,%M,%S')
-                Callable.ddl通知姬(recover=True,gp=int(_),mb=v[1],tit=j,dtime=t-datetime.datetime.now())
+                dic = {
+                    'recover':True,
+                    'gp':int(_),
+                    'mb':v[1],
+                    'tit':j,
+                    'dtime':t-datetime.datetime.now()
+                }
+                await Callable.ddl通知姬(kwargs=dic)
     except:
         print('ddl模块收到异常（不太重要：\n',traceback.format_exc())
+    
     try:
-        asyncio.ensure_future(Callable.CFLoopRoutiner())
-        asyncio.ensure_future(Callable.ATLoopRoutiner())
-        asyncio.ensure_future(Callable.NCLoopRoutiner())
+        for i in os.listdir('DigitalElectronicsTech'):
+            if i[-6:]=='.json5':
+                with open('DigitalElectronicsTech/'+i, 'r', encoding='utf-8') as f: 
+                    j = json5.load(f, encoding='utf-8')
+                for k,v in j.items():
+                    GLOBAL.DEKnowledge[k] = [Plain(f'''{k}\n别名:{v['AN']}\n{v['desc']}''')]
+                    if 'img' in v:
+                        for vi in v['img']:
+                            GLOBAL.DEKnowledge[k].append(generateImageFromFile('DigitalElectronicsTech/img/'+vi))
+                    for an in v['AN']:
+                        GLOBAL.DEKnowledge[an] = GLOBAL.DEKnowledge[k]
     except:
-        print('竞赛日程模块出现异常（不太重要：\n',traceback.format_exc())
+        print("数电笔记初始化失败")
+        traceback.print_exc()
+
     try:
-        asyncio.ensure_future(Callable.WeatherSubscribeRoutiner())
+        book = xlrd.open_workbook("Assets/中药.xlsx")
+        sheet = book.sheet_by_index(0)
+        GLOBAL.中药title = []
+        
+        GLOBAL.中药 = []
+        GLOBAL.中药名索引 = {}
+
+        for p, i in enumerate(sheet.get_rows()):
+            if p == 0:
+                for j in i:
+                    if j.value == "": break
+                    GLOBAL.中药title.append(j.value)
+            else:
+                cont = []
+                for j in range(len(GLOBAL.中药title)):
+                    cont.append(i[j].value)
+                GLOBAL.中药.append('^^'.join(cont)) # 麻黄^^辛温微苦^^发汗解表、宣肺平喘、利水消肿 ...
+                GLOBAL.中药名索引[cont[0]] = p - 1
+        
     except:
-        print('天气预报模块出现异常（不太重要：\n',traceback.format_exc())
-    try:
-        asyncio.ensure_future(Callable.SentenceSubscribeRoutiner())
-    except:
-        print('每日一句模块出现异常（不太重要：\n',traceback.format_exc())
-    try:
-        asyncio.ensure_future(Callable.JRRPclearRoutiner())
-    except:
-        print('清空人品模块异常',traceback.format_exc())
+        print("中药数据库初始化失败")
+        traceback.print_exc()
+
+    RoutinerLoop()
 
 if GLOBAL.py_mirai_version == 3:
     @irori.subroutine
@@ -419,6 +393,6 @@ else:
         await hajime(bot)
     
 
-print(f"============irori running with python-mirai version {GLOBAL.py_mirai_version}=============")
-if GLOBAL.py_mirai_version == 3:irori.run()
-else:app.launch_blocking()
+print(f"===irori running with python-mirai version {GLOBAL.py_mirai_version} at {platform.platform()}===")
+if GLOBAL.py_mirai_version == 3: irori.run()
+else: qqbot.launch_blocking()

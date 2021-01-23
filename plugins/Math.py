@@ -36,6 +36,7 @@ import datetime
 import urllib
 import mido
 from Utils import *
+from Sniffer import *
 importMirai()
 
 '''
@@ -58,13 +59,15 @@ class FindTruth:
         self.__In(inputMono)
         #输出真值表
         self.__Out()
-        
+        self._print()
+
     #输入
     def __In(self,inputMono):
         #得到表达式Str
         self.Str = inputMono
         #筛出字母集合
         self.Set = set(self.Str).difference(set("()!&|>=^"))
+        
     #求公式结果
     def __Sum(self, Str):
         i = 0 #字符位置
@@ -186,7 +189,7 @@ def read_matrix_matlab(s):
                 li[i][j] = float(li[i][j])
     return numpy.matrix(li)
 
-def CalC(*attrs,**kwargs):
+async def CalC(*attrs, kwargs={}):
     try:
         if len(attrs)==3:
             a,b=(int(i) for i in attrs[1:3])
@@ -215,10 +218,10 @@ def CalC(*attrs,**kwargs):
     except Exception as e:
         return [Plain(str(e))]
 
-def CalA(*attrs,**kwargs):
-    return CalC('A',*attrs,**kwargs)
+async def CalA(*attrs,kwargs={}):
+    return await CalC('A',*attrs,kwargs=kwargs)
 
-def CalKatalan(*attrs,**kwargs):
+async def CalKatalan(*attrs,kwargs={}):
     try:
         if len(attrs):
             a = int(attrs[0])
@@ -230,10 +233,26 @@ def CalKatalan(*attrs,**kwargs):
     except Exception as e:
         return [Plain(str(e))]
 
-def 统计姬from104(*attrs, **kwargs):
+async def 统计姬from104(*attrs, kwargs={}):
     l=[float(x) for x in attrs]
+    s = 0
+    for i in l:
+        s+=i**2
+    s/=len(l)
     ostr = []
     ostr.append(Plain(f"Mean 平均数:{statistics.mean(l)}\n"))
+    ostr.append(Plain(f"Mean Square 平方均值:{s}\n"))
+    if len(l) & 1 == 0:
+        d = 0
+
+        # print(l)
+        # print(len(l)>>1)
+        for p, i in enumerate(l[len(l)>>1:]):
+            d+=i-l[p]
+        d/=(len(l)>>1)**2
+        ostr.append(Plain(f"Mean of Successional Difference 逐差均值:{s}\n"))
+
+    
     ostr.append(Plain(f"Median 中位数:{statistics.median(l)}\n"))
     ostr.append(Plain(f"Low Median 低中位数:{statistics.median_low(l)}\n"))
     ostr.append(Plain(f"High Median 高中位数:{statistics.median_high(l)}\n"))
@@ -243,23 +262,57 @@ def 统计姬from104(*attrs, **kwargs):
     ostr.append(Plain(f"Standard Deviation 总体标准差:{statistics.pstdev(l)}\n"))
     return ostr
 
-def QM化简器(*attrs, **kwargs):
-    v = list(attrs)
-    if len(v[0].split(',')) > 1: # 最小项输入
-        if len(v) == 1:
-            return [Plain(text=quine_mccluskey.qmccluskey.maid(minterms=v[0].split(',')))]
-        else:
-            return [Plain(text=quine_mccluskey.qmccluskey.maid('',*v[1:3],minterms=v[0].split(',')))]
-    else:
-        return [Plain(text=quine_mccluskey.qmccluskey.maid(*v[:3]))]
+async def QM化简器(*attrs, kwargs={}):
+    """用QM法化简逻辑式，将给定的布尔表达式化简成最简与或式（NP完全问题，规模过大会爆炸）
+用法：
+    #QM <原式的逗号隔开的最小项表示> [--dc=无关项的最小项表示] [--var=化简后显示字母]
+    #QM <原式的逻辑式表示> [--dc=无关项的最小项表示] [--var=化简后显示字母]
+例:
+    #QM 1,4,2,8,5,7 --var=a,b,c,d
+    #QM b'd+a'bc'+a'bcd' --dc=1,2 --var=a,b,c,d"""
+    v = attrs
+    if v[0].count(',') >= 1: # 最小项输入
 
-def 打印真值表(*attrs, **kwargs):
+        return [Plain(quine_mccluskey.qmccluskey.maid(
+            minterms=v[0].split(','), 
+            argsdont_cares=kwargs.get('-dc', ''),
+            argsvariables=kwargs.get('-var', '')
+        ))]
+
+    else:
+        return [Plain(quine_mccluskey.qmccluskey.maid(
+            argssop=v[0], 
+            argsdont_cares=kwargs.get('-dc', ''),
+            argsvariables=kwargs.get('-var', '')
+        ))]
+
+async def 打印真值表(*attrs, kwargs={}):
     s = FindTruth(' '.join(attrs))
     return [Plain('\n'.join(s.outPut))]
 
-def 逆元(*attrs, **kwargs):return [Plain(str(getinv(int(attrs[0]),int(attrs[1]))))]
+async def 逆元(*attrs, kwargs={}): return [Plain(str(getinv(int(attrs[0]),int(attrs[1]))))]
 
-def 孙子定理(*attrs, **kwargs):
+async def 欧拉函数(*attrs, kwargs={}):
+    """求给定值的欧拉函数
+    :param x: 待求值x
+    :return:
+        int: φ(x)
+    """
+    x = int(attrs[0])
+    res = x
+    upp = x**0.5
+    for i in range(2, int(upp)+1):
+        if x % i == 0:
+            res = (res // i) * (i - 1)
+            while x % i == 0:
+                x //= i
+    if x > 1:
+        res = (res // x) * (x - 1)
+    if x == int(attrs[0]):
+        return [Plain(f'{x}是质数\n{res}')]
+    return [Plain(f'{res}')]
+
+async def 孙子定理(*attrs, kwargs={}):
     il = ' '.join(attrs).strip().split()
     li = []
     for i in il:
@@ -282,9 +335,65 @@ def 孙子定理(*attrs, **kwargs):
             f = L
             r = ((getinv(M2//G, M1//G) * (C1 - C2) // G) % (M1 // G) * M2 + C2) % f
         return [Plain(str(r))]
-            
 
-def 老线代bot了(*attrs, **kwargs):
+async def 计算器(*attrs, kwargs={}):
+    """计算中缀表达式
+    :param exp: 待求表达式（python风格）exp
+    :return:
+        Union[int, float, complex]: result"""
+    player = getPlayer(**kwargs)
+    if attrs[0] in GLOBAL.subscribes:
+        overwriteSniffer(player, '#计算器', r'^[abcdefABCDEFoxj.0-9\s+-/*&^<>~=|%\(\)]+$')
+        return [Plain('遇到可运算表达式直接输出结果')]
+    elif attrs[0] in GLOBAL.unsubscribes:
+        removeSniffer(player, '#计算器')
+        return [Plain('禁用快速计算')]
+    exp, res = evaluate_expression(''.join(attrs).replace(' ','').strip())
+    return [Plain(f"{exp} = {res}")]
+
+async def 逆波兰(*attrs, kwargs={}):
+    """计算逆波兰表达式
+    :param exp: 待求表达式（默认空格分隔）exp
+    :return:
+        Union[int, float, complex]: result"""
+    player = getPlayer(**kwargs)
+    op1 = []
+    op2 = []
+    for i in attrs:
+        if i in binocular_calculate_map:
+            A = op2.pop()
+            B = op2.pop()
+            op2.append(f'({B}{i}{A})')
+        else:
+            op2.append(i)
+    try:
+        for i in attrs:
+            if i in binocular_calculate_map:
+                A = op1.pop()
+                B = op1.pop()
+                op1.append(binocular_calculate_map[i](B,A))
+            else:
+                if 'j' in i:
+                    op1.append(complex(i))
+                elif '.' in i or 'e' in i:
+                    op1.append(float(i))
+                elif 'x' in i:
+                    op1.append(int(i, 16))
+                elif 'o' in i:
+                    op1.append(int(i, 8))
+                elif 'b' in i:
+                    op1.append(int(i, 2))
+                else:
+                    op1.append(int(i))
+    except:
+        op1 = ['evaluate failed.']
+    print(op1, op2)
+    return [Plain(f'{op1[0]}\n{op2[0]}')]
+
+逆波兰.SHORTS = ['#nbl']
+
+async def 老线代bot了(*attrs, kwargs={}):
+    print(attrs)
     if attrs[0] in ('乘','*','mul'):
         A = read_matrix_matlab(attrs[1])
         B = read_matrix_matlab(attrs[2])
@@ -333,7 +442,7 @@ def 老线代bot了(*attrs, **kwargs):
     else:
         return [Plain('没有命中的决策树，看看#h #线代？')]
 
-def 离散闭包用工具(*attrs, **kwargs):
+async def 离散闭包用工具(*attrs, kwargs={}):
     m = {} # 数转名
     r = {} # 名转数
     def addval(v):
@@ -416,7 +525,57 @@ t(R)即传递闭包：
 """
     return [Plain(renderer)]
 
-def 划分数个数(*attrs, **kwargs): return [Plain(A000110_list(int(attrs[0]), kwargs.get('-m', 0)))]
+async def 球盒(*attrs, kwargs={}):
+    """求解把n个球放进m个盒子里面有多少种方案的问题。
+必须指定盒子和球以及允不允许为空三个属性。
+用法：
+    #球盒 <盒子相同？(0/1)><球相同？(0/1)><允许空盒子？(0/1)> n m
+用例：
+    #球盒 110 20 5
+    上述命令求的是盒子相同，球相同，不允许空盒子的情况下将20个球放入5个盒子的方案数。"""
+    # 参考https://www.cnblogs.com/sdfzsyq/p/9838857.html的算法
+    if len(attrs)!=3:
+        return '不是这么用的！请输入#h #球盒'
+    n, m = map(int, attrs[1:3])
+    if attrs[0] == '110':
+        f = A072233_list(n, m)
+        return f[n][m]
+    elif attrs[0] == '111':
+        f = A072233_list(n, m)
+        return sum(f[-1])
+    elif attrs[0] == '100':
+        return A048993_list(n, m)[-1]
+    elif attrs[0] == '101':
+        return sum(A048993_list(n, m))
+    elif attrs[0] == '010':
+        return comb(n-1, m-1)
+    elif attrs[0] == '011':
+        return comb(n+m-1, m-1)
+    elif attrs[0] == '000': # 求两个集合的满射函数的个数可以用
+        return A048993_list(n, m)[-1] * math.factorial(m)
+    elif attrs[0] == '001':
+        return m**n
+    else:
+        return f"解析不了的属性：{attrs[0]}，我们只吃长度为3的01串喵"
+
+async def 十转(*attrs, kwargs={}):
+    """十进制转换为其他进制工具：
+输入格式：
+    #十转 <目标进制> <源十进制数>
+例：
+    #十转 5 261"""
+    l = []
+    b = int(attrs[0])
+    x = int(attrs[1])
+    if x==0:
+        return 0
+    while x:
+        l.append(str(x%b))
+        x//=b
+    l.reverse()
+    return f"{l}\n{''.join(l)}"
+
+async def 划分数个数(*attrs, kwargs={}): return [Plain(A000110_list(int(attrs[0]), kwargs.get('-m', 0)))]
     
 functionMap = {
     '#QM':QM化简器,
@@ -425,6 +584,7 @@ functionMap = {
     '#K':CalKatalan,
     '#统计':统计姬from104,
     '#inv':逆元,
+    '#phi':欧拉函数,
     '#CRT':孙子定理,
     '#线代':老线代bot了,
     '#真值表':打印真值表,
@@ -442,6 +602,7 @@ functionDescript = {
     '#encap':'根据所给二元组表分析关系。例子：#encap a,b a,c a,d',
     '#统计':'焊接自104空间的统计代码，接受空格分隔的浮点参数，返回样本中位数，平均数，方差等信息，例:#统计 11.4 51.4 19.19 8.10',
     '#B': '计算给定集合的划分的方案数，可以用-m选项提供求模数。用例#B 233 -m=10086',
+    '#phi': '算欧拉函数',
     '#C':
 '''
 两个参数计算组合数，一个参数计算阶乘
@@ -451,16 +612,6 @@ functionDescript = {
     #C 20
     计算阶乘20!
 ''',
-    '#QM':
-"""
-用QM法化简逻辑式，将给定的布尔表达式化简成最简与或式（NP完全问题，规模过大会爆炸）
-用法：
-    #QM <原式的逗号隔开的最小项表示> [无关项的最小项表示] [化简后显示字母]
-    #QM <原式的逻辑式表示> [无关项的最小项表示]
-例:
-    #QM 1,4,2,8,5,7 3 a,b,c,d
-    #QM b'd+a'bc'+a'bcd' 1,2
-""",
     '#线代':
 """线代工具箱，底层是numpy，能算一些矩阵相关
 用法：

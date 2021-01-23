@@ -1,5 +1,5 @@
-kuriyama
-numpy
+pydantic==1.7.0
+numpy==1.19.3
 bs4
 requests[socks]
 qrcode
@@ -11,3 +11,5 @@ colorclass==2.2.0
 mido
 pexpect
 graia-application-mirai
+graia-broadcast==0.5.0
+xlrd==1.2.0

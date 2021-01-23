@@ -1,115 +1,162 @@
-from graia.broadcast.entities.event import BaseEvent
-from graia.broadcast.entities.dispatcher import BaseDispatcher
-from graia.broadcast.interfaces.dispatcher import DispatcherInterface
-from graia.broadcast.protocols.executor import ExecutorProtocol
-from graia.broadcast.entities.listener import Listener
-from graia.broadcast import Broadcast
-from graia.broadcast.entities.decorater import Decorater
-from graia.broadcast.builtin.decoraters import Depend, Middleware
-from graia.broadcast.interfaces.decorater import DecoraterInterface
-from graia.broadcast.exceptions import PropagationCancelled
-from graia.application.event.messages import GroupMessage
-import random
-import asyncio
-import time
-import copy
 import datetime
+import requests
+import json
+import random
 
-# class GroupMessage(MiraiEvent):
-#     type: str = "GroupMessage"
-#     messageChain: MessageChain
-#     sender: Member
 
-#     class Dispatcher(BaseDispatcher):
-#         mixin = [MessageChainCatcher, ApplicationDispatcher]
+def jsontimestampnow(): return int(datetime.datetime.now().timestamp()*1000)
 
-#         @staticmethod
-#         def catch(interface: DispatcherInterface):
-#             if interface.annotation is Group:
-#                 return interface.event.sender.group
-#             elif interface.annotation is Member:
-#                 return interface.event.sender
+smjb = random.randint(10000000, 99999999)
+s = requests.sessions.Session()
 
-class parseminus(BaseDispatcher):
-    @staticmethod
-    async def catch(interface: DispatcherInterface):
-        print(interface.name)
-        if interface.name == "extDict":
-            print('etx')
-            return {'a':233}
+def reactive_session():
 
-class D1(BaseDispatcher):
-    @staticmethod
-    def catch(interface: DispatcherInterface):
-        if interface.annotation == dict:
-            return random.random()
 
-class D2(BaseDispatcher):
-    mixin = [D1]
-    @staticmethod
-    async def catch(interface: DispatcherInterface):
-        if interface.annotation == "13":
-            r = await interface.execute_with(interface.name, "123", interface.default)
-            return r
+    global s, smjb
+    get_cfduid_lnk = 'https://static.deepl.com/css/cookieBanner.$21aa7c.css'
 
-class TestEvent(BaseEvent):
-    extDict: dict
+    get_cfduid_headers = {
+        "accept": "text/css,*/*;q=0.1",
+        "accept-encoding": "gzip, deflate, br",
+        "accept-language": "zh-CN,zh;q=0.9",
+        "cache-control": "no-cache",
+        "dnt": "1",
+        "pragma": "no-cache",
+        "referer": "https://www.deepl.com/translator",
+        "sec-fetch-mode": "no-cors",
+        "sec-fetch-site": "same-site",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36"
+    }
 
-    class Dispatcher(BaseDispatcher):
-        mixin = [D2]
+    privacy_lnk = 'https://www.deepl.com/PHP/backend/privacy.php?request_type=jsonrpc&il=ZH'
 
-        @staticmethod
-        def catch(interface: DispatcherInterface):
-            # print(interface.parameter_contexts)
-            if interface.name == "u":
-                yield 1
-            elif interface.annotation == str:
-                yield 12
+    privacy_headers = {
+        "accept": "*/*",
+        "accept-encoding": "gzip, deflate, br",
+        "accept-language": "zh-CN,zh;q=0.9",
+        "cache-control": "no-cache",
+        "content-length": "138",
+        "content-type": "application/json",
+        "dnt": "1",
+        "origin": "https://www.deepl.com",
+        "pragma": "no-cache",
+        "referer": "https://www.deepl.com/translator",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-site": "same-origin",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36"
+    }
 
-event = TestEvent()
-loop = asyncio.get_event_loop()
-broadcast = Broadcast(loop=loop, debug_flag=True)
+    privacy_payload = {
+        "jsonrpc": "2.0",
+        "method": "setPrivacySettings",
+        "params": {
+            "consent": [
+                "NECESSARY",
+                "PERFORMANCE",
+                "COMFORT"
+            ],
+            "mode": "LAX_AUTO"
+        },
+        "id": smjb
+    }
 
-i = 0
-l = asyncio.Lock()
+    LMTBID_lnk = 'https://www2.deepl.com/jsonrpc'
 
-async def r(extDict: dict):
-    global i
-    async with l:
-        i += 1
+    LMTBID_headers = {
+        "accept": "*/*",
+        "accept-encoding": "gzip, deflate, br",
+        "accept-language": "zh-CN,zh;q=0.9",
+        "cache-control": "no-cache",
+        "content-length": "389",
+        "content-type": "application/json",
+        "dnt": "1",
+        "origin": "https://www.deepl.com",
+        "pragma": "no-cache",
+        "referer": "https://www.deepl.com/translator",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-site": "same-site",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36"
+    }
 
-# for _ in range(15):
-@broadcast.receiver(TestEvent, headless_decoraters=[Depend(r)], dispatchers=[parseminus])
-async def test():
-    print(datetime.datetime.now())
-        # print(extDict)
 
-@broadcast.receiver(TestEvent, headless_decoraters=[Depend(r)], dispatchers=[parseminus])
-async def test2(extDict: dict):
-    print(extDict)
+    LMTBID_data = {
+        "jsonrpc": "2.0",
+        "method": "LMT_handle_jobs",
+        "params": {
+            "jobs": [
+                {
+                    "kind": "default",
+                    "raw_en_sentence": "h",
+                    "raw_en_context_before": [],
+                    "raw_en_context_after":[],
+                    "preferred_num_beams":4,
+                    "quality":"fast"
+                }
+            ],
+            "lang": {
+                "user_preferred_langs": [l2, l1],
+                "source_lang_user_selected": "auto",
+                "target_lang": l2
+            },
+            "priority": -1,
+            "commonJobParams": {"formality": None},
+            "timestamp": jsontimestampnow()
+        },
+        "id": smjb
+    }
+    r = s.get(get_cfduid_lnk, headers=get_cfduid_headers)
+    r2 = s.post(privacy_lnk, headers=privacy_headers, json=privacy_payload)
+    r3 = s.post(LMTBID_lnk, headers=LMTBID_headers, json=LMTBID_data)
 
-@broadcast.receiver(TestEvent, headless_decoraters=[Depend(r)])
-async def test3():
-    print('coconmsl')
+def deepl_translate(src, l1='ZH', l2='EN'):
+    get_translate_lnk = 'https://www2.deepl.com/jsonrpc'
 
-async def main(start):
-    print("将在 1 s 后开始测试.")
-    for i in range(1, 2):
-        print(i)
-        await asyncio.sleep(1)
-    print("测试开始.", start)
-    for _ in range(10):
-        broadcast.postEvent(TestEvent())
-    end = time.time()
-    print(f"事件广播完毕, 总共 10 个, 当前时间: {end}, 用时: {end - start - 5}")
+    get_translate_headers = {
+        "accept": "*/*",
+        "accept-encoding": "gzip, deflate, br",
+        "accept-language": "zh-CN,zh;q=0.9",
+        "cache-control": "no-cache",
+        "content-length": "435",
+        "content-type": "application/json",
+        "dnt": "1",
+        "origin": "https://www.deepl.com",
+        "pragma": "no-cache",
+        "referer": "https://www.deepl.com/translator",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-site": "same-site",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36"
+    }
 
-start = time.time()
-loop.run_until_complete(main(start))
+    get_translate_data = {
+        "jsonrpc": "2.0", 
+        "method": "LMT_handle_jobs", 
+        "params": {
+            "jobs": [
+                {
+                    "kind": "default", 
+                    "raw_en_sentence": src, 
+                    "raw_en_context_before": [], 
+                    "raw_en_context_after":[], 
+                    "preferred_num_beams":4, 
+                    "quality":"fast"
+                }
+            ], 
+            "lang": {
+                "user_preferred_langs": [l2, l1], 
+                "source_lang_user_selected": "auto", 
+                "target_lang": l2
+            }, 
+            "priority": -1, 
+            "timestamp": jsontimestampnow()
+        }, 
+        "id": smjb
+    }
 
-end = time.time()
-print(f"测试结束, 1s 后退出, 用时 {end - start - 5}")
-loop.run_until_complete(asyncio.sleep(1))
+    r4 = s.post(get_translate_lnk, headers=get_translate_headers, json=get_translate_data)
+    res = json.loads(r4.text)
+    print(res['result']['translations'][0]['beams'][0]['postprocessed_sentence'])
 
-print(i)
-#import pdb; pdb.set_trace()
-print("退出....", time.time() - start)
+BaiduTTSLnk = ' http://tts.baidu.com/text2audio?lan=zh&ie=UTF-8&spd=5&text='
+
+while 1:
+    print(eval(input('>>>')))
