@@ -537,6 +537,21 @@ async def 爬what_anime(*attrs,kwargs={}):
     爬取whats_anime的番剧信息
     '''
     def get_info(info):
+        '''
+            输入info（json对象），返回需要的信息列表；
+            可能需要的信息包括（按顺序）：
+                日文标题
+                中文标题
+                英文标题
+                剧集序数
+                
+                此番剧在anilist中的id（anilist是一个保存番剧信息的网站）
+                文件名（用于查找番剧截图）
+                所处位置（秒）
+                指纹
+
+                是否包含成人内容
+        '''
         docs=info["docs"]
         firstres=docs[0]
 
@@ -556,9 +571,13 @@ async def 爬what_anime(*attrs,kwargs={}):
         return li
     
     def get_prew(ret:list,info_li:list):
+        '''
+            输入ret（信息链list），info_li（列表化的信息list）；
+            将预览图插入到信息链中；
+        '''
         if info_li[8]:
-            ret.append(Plain(f'结果可能包含成人内容……\n'))
-            return
+            ret.append(Plain(f'结果可能包含成人内容\n'))
+            
         res2=requests.get('https://trace.moe/thumbnail.php?anilist_id={}&file={}&t={}&token={}'.format(info_li[4],info_li[5],info_li[6],info_li[7]),timeout=20)
         #res2=requests.get(f'https://media.trace.moe/video/{info_li[4]}/{info_li[5]}?t={info_li[6]}&token={info_li[7]}',timeout=20)
         if res2.status_code==200:
@@ -572,6 +591,10 @@ async def 爬what_anime(*attrs,kwargs={}):
             ret.append(Plain(f'抓图过程中发生了一点差错:{res2.status_code}\n'))
 
     def get_word(info):
+        '''
+            输入info（信息json对象），返回字符串ans；
+            将番剧基本信息形成字符串并返回
+        '''
         firstres=info["docs"][0]
         ans='\n'
 

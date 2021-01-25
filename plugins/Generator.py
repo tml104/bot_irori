@@ -1,5 +1,8 @@
 """生成器类"""
+from asyncio.tasks import wait
 import os
+
+from requests.api import request
 if __name__ == '__main__':
     os.chdir('..')
 import GLOBAL
@@ -329,6 +332,42 @@ async def 今日人品(*attrs,kwargs={}):
     #elif rp_val==0:
     #    ans+='危！'
     #return [Plain(ans)]
+
+async def 猫狗(*attrs,kwargs={}):
+    '''
+        分辨猫狗
+    '''
+    if 'pic' in kwargs and kwargs['pic']:
+        from tensorflow.keras.models import load_model
+        from tensorflow.keras.preprocessing import image
+        import numpy as np
+
+        pic_url=kwargs['pic'].url
+        img_path = f"tmpCATDOG_{randstr(3)}.jpg"
+        with requests.get(pic_url) as res:
+            with open(img_path,'wb') as img_path_f:
+                img_path_f.write(res.content)
+            img=image.load_img(img_path,target_size=(150,150))
+            img_tensor=image.img_to_array(img)
+            img_tensor=np.expand_dims(img_tensor,axis=0)
+            img_tensor/=255.0
+            
+            asyncio.ensure_future(rmTmpFile(img_path))
+            #return [Plain(str(img_tensor))]
+            ans=GLOBAL.cat_dog_model.predict(img_tensor)
+            ret=[Plain(str(ans))]
+            if ans<0.2:
+                ret.append(Plain('\n大概率是只猫'))
+            elif ans<=0.5:
+                ret.append(Plain('\n也许是只猫'))
+            elif ans<=0.8:
+                ret.append(Plain('\n也许是条狗'))
+            else:
+                ret.append(Plain('\n大概率是条狗'))
+
+            return ret
+    else:
+        return [Plain("没图")]
 
 functionMap = {
     '#论证':这么臭的函数有必要定义吗,

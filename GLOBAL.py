@@ -94,6 +94,9 @@ JRRP_words=[
 	#编程
 	"抓虫","重构","搞irori",
 ]
+from tensorflow.keras.models import load_model
+cat_dog_model=load_model('cats_and_dogs_small2.h5')
+
 
 RUSHRATE = {}
 
