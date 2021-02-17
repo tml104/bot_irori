@@ -336,10 +336,12 @@ async def 今日人品(*attrs,kwargs={}):
 async def 猫狗(*attrs,kwargs={}):
     '''
         分辨猫狗
+        (模型精度大约为97%)
     '''
     if 'pic' in kwargs and kwargs['pic']:
-        from tensorflow.keras.models import load_model
+        #from tensorflow.keras.models import load_model
         from tensorflow.keras.preprocessing import image
+        from tensorflow.keras.applications.vgg16 import preprocess_input
         import numpy as np
 
         pic_url=kwargs['pic'].url
@@ -350,7 +352,8 @@ async def 猫狗(*attrs,kwargs={}):
             img=image.load_img(img_path,target_size=(150,150))
             img_tensor=image.img_to_array(img)
             img_tensor=np.expand_dims(img_tensor,axis=0)
-            img_tensor/=255.0
+            #img_tensor/=255.0
+            img_tensor=preprocess_input(img_tensor)
             
             asyncio.ensure_future(rmTmpFile(img_path))
             #return [Plain(str(img_tensor))]
